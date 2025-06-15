@@ -1,1 +1,6 @@
+
+# Ignore build files
+cmake-build-*/
+
+# Ignore video files
 *.mp4
