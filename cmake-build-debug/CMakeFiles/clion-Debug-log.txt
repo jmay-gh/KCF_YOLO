@@ -1,5 +1,5 @@
-/Applications/CLion.app/Contents/bin/cmake/mac/x64/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/Applications/CLion.app/Contents/bin/ninja/mac/x64/ninja -G Ninja -S /Users/jackmay/Desktop/msc_cs/dissertation/KCF+YOLO_cpp -B /Users/jackmay/Desktop/msc_cs/dissertation/KCF+YOLO_cpp/cmake-build-debug
+/Applications/CLion.app/Contents/bin/cmake/mac/x64/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/Applications/CLion.app/Contents/bin/ninja/mac/x64/ninja -G Ninja -S /Users/jackmay/Desktop/KCF_YOLO -B /Users/jackmay/Desktop/KCF_YOLO/cmake-build-debug
 -- Using ONNX Runtime from: /usr/local/Cellar/onnxruntime/1.21.1
 -- Configuring done (0.1s)
 -- Generating done (0.1s)
--- Build files have been written to: /Users/jackmay/Desktop/msc_cs/dissertation/KCF+YOLO_cpp/cmake-build-debug
+-- Build files have been written to: /Users/jackmay/Desktop/KCF_YOLO/cmake-build-debug

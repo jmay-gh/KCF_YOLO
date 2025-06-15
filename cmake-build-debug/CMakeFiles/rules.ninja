@@ -6,7 +6,7 @@
 # It is included in the main 'build.ninja'.
 
 # =============================================================================
-# Project: KCF_YOLO_Tracker
+# Project: KCF_YOLO
 # Configurations: Debug
 # =============================================================================
 # =============================================================================
@@ -42,7 +42,7 @@ rule CUSTOM_COMMAND
 # Rule for re-running cmake.
 
 rule RERUN_CMAKE
-  command = /Applications/CLion.app/Contents/bin/cmake/mac/x64/bin/cmake --regenerate-during-build -S/Users/jackmay/Desktop/msc_cs/dissertation/KCF+YOLO_cpp -B/Users/jackmay/Desktop/msc_cs/dissertation/KCF+YOLO_cpp/cmake-build-debug
+  command = /Applications/CLion.app/Contents/bin/cmake/mac/x64/bin/cmake --regenerate-during-build -S/Users/jackmay/Desktop/KCF_YOLO -B/Users/jackmay/Desktop/KCF_YOLO/cmake-build-debug
   description = Re-running CMake...
   generator = 1
 
