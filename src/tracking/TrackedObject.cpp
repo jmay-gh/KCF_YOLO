@@ -28,6 +28,13 @@ void TrackedObject::resetFailures() { consecutiveFailures = 0; }
 // Check if the failure threshold reached
 bool TrackedObject::checkFailures() { return consecutiveFailures >= 7; }
 
+// Calculate confidence
+void TrackedObject::calculateConfidence() {
+
+    // Check confidence in 3 ways
+
+
+}
 
 // Match tracker
 void TrackedObject::matchTracker(cv::Rect box, cv::Mat frame) {
@@ -45,5 +52,6 @@ void TrackedObject::draw(cv::Mat& frame) {
     rectangle(frame, bbox, color, 2);
     cv::Point point = bbox.tl();
     point.y -= 5;
-    putText(frame, std::to_string(trackerNum) + " " + label, point, cv::FONT_HERSHEY_SIMPLEX, 1, color, 2);
+    putText(frame, label + " : " + std::to_string(trackerNum),
+            point, cv::FONT_HERSHEY_SIMPLEX, 0.7, color, 2);
 }

@@ -27,6 +27,7 @@ public:
     void setFailure();
     void resetFailures();
     bool checkFailures();
+    void calculateConfidence();
     void matchTracker(cv::Rect box, cv::Mat frame);
     void draw(cv::Mat& frame);
 };

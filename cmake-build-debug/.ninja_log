@@ -8,3 +8,7 @@
 2268	8552	1749455379848479091	CMakeFiles/KCF_YOLO_Tracker.dir/src/tracking/kcftracker.cpp.o	b9f1f129fb5bf69c
 32	2330	1750018032528484145	CMakeFiles/KCF_YOLO_Tracker.dir/src/hungarian_algo/munkres.cpp.o	5013160fc9bc433c
 7	2258	1749455377587468931	CMakeFiles/KCF_YOLO_Tracker.dir/src/tracking/TrackerConfig.cpp.o	d35061ce3fdbb013
+12	3268	1750069816639791947	CMakeFiles/KCF_YOLO_Tracker.dir/src/tracking/TrackedObject.cpp.o	3721c1af472c8f29
+3270	3686	1750069819897685428	KCF_YOLO_Tracker	48a0aad794a4aecd
+10	2548	1750069848939733024	CMakeFiles/KCF_YOLO_Tracker.dir/src/tracking/TrackedObject.cpp.o	3721c1af472c8f29
+2549	2634	1750069851478352587	KCF_YOLO_Tracker	48a0aad794a4aecd
