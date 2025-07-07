@@ -1,0 +1,16 @@
+# Ignore IDE
+.idea/
+.vscode/
+
+# Ignore build files
+/cmake-build-debug/
+/build/
+
+# Ignore video files
+*.mp4
+*.avi
+img/WildLive/
+
+# Ignore other
+*.pt
+*.onnx
