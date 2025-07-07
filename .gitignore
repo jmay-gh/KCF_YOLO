@@ -11,6 +11,3 @@
 *.avi
 img/WildLive/
 
-# Ignore other
-*.pt
-*.onnx
