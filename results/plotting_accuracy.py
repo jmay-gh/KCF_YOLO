@@ -2,10 +2,17 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 # Data
-methods = ['Nearest Neighbour', 'Hungarian Algorithm', 'Earth Movers Distance']
-tp = [762, 767, 608]
-fp = [20, 15, 174]
-fn = [10, 4, 11]
+methods = ['Nearest Neighbour', 'Hungarian Algorithm', 'EMD - Distance', 'EMD - Area', 'EMD - HOG']
+
+## WITH NOISE
+# tp = [4233, 4246, 4175, 4252, 4245]
+# fp = [718, 705, 776, 699, 706]
+# fn = [61, 53, 86, 37, 57]
+
+## WITHOUT NOISE
+tp = [4897, 4897, 4894, 4897, 4897]
+fp = [54, 54, 57, 54, 54]
+fn = [43, 43, 45, 43, 43]
 
 # Create DataFrame
 df = pd.DataFrame({
@@ -33,7 +40,7 @@ for i, method in enumerate(methods):
     for cat in ['True Positives', 'False Positives', 'False Negatives']:
         value = df[cat][i]
         if value > 0:
-            ax.text(i, cumulative + value / 2, str(value), ha='center', va='center', color='white', fontsize=9)
+            ax.text(i, cumulative + value / 2, str(value), ha='center', va='center', color='black', fontsize=9)
         cumulative += value
 
 # Customize plot

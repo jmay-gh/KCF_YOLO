@@ -1,0 +1,98 @@
+void runTrackingOnDataset(const std::string& filePath,
+                          const std::string& groundTruthPath,
+                          const TrackerConfig& config,
+                          YOLOv11SegDetector& detector,
+                          DepthAnything& depthEstimator,
+                          const std::vector<std::string>& classNames,
+                          int datasetIdx) {
+
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+
+            float trackConf = 0.15 + i * 0.1;
+            float detectConf = 0.15 + i * 0.1;
+
+            ifstream listFramesFile(filePath);
+            if (!listFramesFile.is_open()) {
+                cerr << "Could not open image list: " << filePath << endl;
+                return;
+            }
+
+            string frameName;
+            getline(listFramesFile, frameName);
+            Mat firstFrame = imread(frameName, IMREAD_COLOR);
+            if (firstFrame.empty()) {
+                cerr << "Could not read first frame from: " << frameName << endl;
+                return;
+            }
+
+            int frameWidth = firstFrame.cols;
+            int frameHeight = firstFrame.rows;
+            double fps = 20.0;
+
+            // Reset file
+            listFramesFile.clear();
+            listFramesFile.seekg(0);
+
+            string animalType;
+            if (filePath.find("horse") != string::npos) animalType = "horse";
+            else if (filePath.find("zebra") != string::npos) animalType = "zebra";
+            else if (filePath.find("deer") != string::npos) animalType = "deer";
+
+            string outputVideoPath = "../results/output_" + to_string(datasetIdx) + ".avi";
+            VideoWriter videoWriter(outputVideoPath, VideoWriter::fourcc('M','J','P','G'),
+                                    fps, Size(frameWidth, frameHeight));
+
+            string resultsPath = "../results/confidence_range/" + animalType + "_" + to_string(datasetIdx+1) + "_" +
+                    to_string(i) + to_string(j) + ".txt";
+            ofstream outputFile(resultsPath);
+            if (!outputFile.is_open()) {
+                cerr << "Could not write to: " << resultsPath << endl;
+                return;
+            }
+
+            // Tracker manager
+            TrackerManager trackerManager(config, classNames, firstFrame);
+
+            trackerManager.trackConfThreshold = trackConf;
+            trackerManager.detectConfThreshold = detectConf;
+
+            int frameIdx = 0;
+            Mat frame, depthMap, depthColor;
+
+            while (getline(listFramesFile, frameName)) {
+                frame = imread(frameName, IMREAD_COLOR);
+                if (frame.empty()) continue;
+
+                if (frameIdx % 8 == 0) {
+                    depthMap = depthEstimator.predict(frame.clone());
+                    auto detections = detector.segment(frame);
+                    trackerManager.updateTrackersWithDetections(frame, detections, depthMap);
+                } else {
+                    trackerManager.updateTrackers(frame);
+                }
+
+                // Draw trackers
+                trackerManager.drawTrackers(frame);
+
+                // Show/save results
+                if (config.output == TrackerConfig::SHOW || config.output == TrackerConfig::BOTH) {
+                    imshow("Tracking", frame);
+                    waitKey(1);
+                }
+                if (config.output == TrackerConfig::SAVE) {
+                    videoWriter.write(frame);
+                }
+                if (config.output == TrackerConfig::RESULTS) {
+                    trackerManager.outputTrackers(outputFile, frameIdx);
+                }
+                ++frameIdx;
+            }
+
+            cout << "Finished processing dataset " << datasetIdx + 1 << endl;
+            outputFile.close();
+            videoWriter.release();
+            listFramesFile.close();
+        }
+    }
+}

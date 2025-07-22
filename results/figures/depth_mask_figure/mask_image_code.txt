@@ -1,0 +1,49 @@
+void saveDepthSegFigure(const cv::Mat& frame,
+                        const std::vector<Segmentation>& detections,
+                        const cv::Mat& depthMap,
+                        const std::string& savePrefix) {
+
+    namespace fs = std::filesystem;
+    fs::create_directories("../results/figures/");
+
+    // Normalize and colorize depth map
+    cv::Mat depthGray;
+    cv::normalize(depthMap, depthGray, 0, 255, cv::NORM_MINMAX, CV_8U);
+    cv::cvtColor(depthGray, depthGray, cv::COLOR_GRAY2BGR);
+
+    Segmentation leftMost;
+    int leftMostX = frame.cols;
+    for (auto detection : detections) {
+        if (detection.box.x < leftMostX) {
+            leftMostX = detection.box.x;
+            leftMost = detection;
+        }
+    }
+
+    cv::Rect bbox = boundingRect(leftMost.mask);
+
+    // Expand with buffer
+    bbox.x = std::max(0, bbox.x - 100);
+    bbox.y = std::max(0, bbox.y - 50);
+    bbox.width = std::min(frame.cols - bbox.x, bbox.width + 2 * 100);
+    bbox.height = std::min(frame.rows - bbox.y, bbox.height + 2 * 50);
+
+    // Prepare visualizations
+    cv::Mat redMask(frame.size(), CV_8UC3, cv::Scalar(0, 0, 0));
+    redMask.setTo(cv::Scalar(0, 0, 255), leftMost.mask); // Red where mask is 1
+
+    // Blend overlays
+    cv::Mat frameMasked, depthMasked;
+    cv::addWeighted(frame, 1.0, redMask, 0.5, 0.0, frameMasked);
+    cv::addWeighted(depthGray, 1.0, redMask, 0.5, 0.0, depthMasked);
+
+    // Crop to bounding box
+    cv::Mat frameCrop = frameMasked(bbox);
+    cv::Mat depthCrop = depthGray(bbox);
+    cv::Mat overlayCrop = depthMasked(bbox);
+
+    // Save
+    cv::imwrite("../results/figures/" + savePrefix + "_1_masked.jpg", frameCrop);
+    cv::imwrite("../results/figures/" + savePrefix + "_2_depth.jpg", depthCrop);
+    cv::imwrite("../results/figures/" + savePrefix + "_3_overlay.jpg", overlayCrop);
+}

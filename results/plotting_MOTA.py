@@ -4,10 +4,18 @@ import pandas as pd
 
 # Define the data
 data = {
-    'Method': ['Nearest Neighbour', 'Hungarian Algorithm', 'Earth Movers Distance'],
-    'Precision': [0.974425, 0.980818, 0.777494],
-    'Recall': [0.987047, 0.994812, 0.982229],
-    'F1 Score': [0.980695, 0.987766, 0.867951]
+    'Method': ['Nearest Neighbour', 'Hungarian Algorithm', 'EMD - Distance', 'EMD - Area', 'EMD - HOG'],
+
+    # WITH NOISE
+    # 'Precision': [0.854979, 0.857605, 0.843264, 0.858816, 0.857403],
+    # 'Recall': [0.985794, 0.987672, 0.979817, 0.991373, 0.98675],
+    # 'F1 Score': [0.915738, 0.918054, 0.906426, 0.920346, 0.91754]
+
+    ## WITHOUT NOISE
+    'Precision': [0.989093, 0.989093, 0.988487, 0.989093, 0.989093],
+    'Recall': [0.991296, 0.991296, 0.990889, 0.991296, 0.991296],
+    'F1 Score': [0.990193, 0.990193, 0.989687, 0.990193, 0.990193]
+
 }
 
 # Convert to DataFrame
