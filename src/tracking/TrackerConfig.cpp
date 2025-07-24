@@ -30,6 +30,16 @@ void TrackerConfig::setDistance(int distanceSelected) {
     distance = static_cast<DistanceType>(distanceSelected);
 }
 
+void TrackerConfig::setOcclusion(int occlusionSelected) {
+    // Set the occlusion handling type
+    occlusion = static_cast<OcclusionType>(occlusionSelected);
+}
+
+void TrackerConfig::setRemoval(int removalSelected) {
+    // Set the removal type
+    removal = static_cast<RemovalType>(removalSelected);
+}
+
 void TrackerConfig::setOutput(int outputSelected) {
     // Set the output type
     output = static_cast<OutputType>(outputSelected);

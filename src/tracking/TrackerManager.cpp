@@ -5,39 +5,62 @@ using namespace std;
 using namespace trackingUtils;
 
 TrackerManager::TrackerManager(const TrackerConfig& config, const vector<string>& classNames, Mat& currentFrame)
-    : matchingManager(config), config(config), classNames(classNames), currentFrame(currentFrame) { }
+    : matchingManager(config), config(config), classNames(classNames), currentFrame(currentFrame)
+{
+    trackConfThreshold = 0.3f;
+    detectConfThreshold = 0.3f;
+    unmatchedThreshold = 12;
+}
 
 void TrackerManager::updateTrackers(const Mat& frame) {
-    for (auto& tracker : trackers) { tracker.updateTracker(frame); }
-
-    // Freeze trackers that are occluded
     for (auto& tracker : trackers) {
-        for (auto& otherTracker : trackers) {
-            if (&tracker == &otherTracker || // Skip if same tracker
-            tracker.depth > otherTracker.depth || // Skip if tracker is closer
-            otherTracker.isOccluded) continue; // Skip if other tracker is already occluded
+        tracker.updateTracker(frame);
 
-            cv::Point center = trackingUtils::rectCenter(tracker.bbox);
-            if (otherTracker.bbox.contains(center)) {
-                tracker.isOccluded = true;
-                cout << "Tracker " << tracker.trackerNum << " is occluded by Tracker " << otherTracker.trackerNum << endl;
-                break;
+        // CHECK FOR OCCLUSIONS
+        tracker.isOccluded = false;
+        if (config.occlusion != TrackerConfig::NO_OCCLUSION) {
+            for (auto &otherTracker: trackers) {
+                if (&tracker == &otherTracker || // Skip if same tracker
+                    tracker.depth > otherTracker.depth || // Skip if tracker is closer
+                    otherTracker.isOccluded)
+                    continue; // Skip if other tracker is already occluded
+
+                cv::Point center = trackingUtils::rectCenter(tracker.bbox);
+                if (otherTracker.bbox.contains(center)) {
+                    tracker.isOccluded = true;
+                    break;
+                }
             }
-            else tracker.isOccluded = false;
         }
-        if (tracker.conf < 0.3) tracker.consecutiveLoss++;
-        else tracker.consecutiveLoss = 0;
+
+        // CHECK FOR REMOVAL
+        if (config.removal == TrackerConfig::STRIKE_BASED) {
+            if (tracker.conf < trackConfThreshold) tracker.consecutiveLoss++;
+            else tracker.consecutiveLoss = 0;
+        }
     }
 
-    // Remove trackers that have low confidence
+    // REMOVE TRACKERS
     for (auto it = trackers.begin(); it != trackers.end(); ) {
-        if (it->consecutiveLoss >= 15 && !it->isOccluded) it = trackers.erase(it);
+        bool remove = false;
+        if (config.removal == TrackerConfig::THRESHOLD) {
+            remove = config.occlusion == TrackerConfig::RELAXED_REMOVAL
+                     ? (it->conf < trackConfThreshold && !it->isOccluded)
+                     : (it->conf < trackConfThreshold);
+        } else if (config.removal == TrackerConfig::STRIKE_BASED) {
+            remove = config.occlusion == TrackerConfig::RELAXED_REMOVAL
+                     ? (it->consecutiveLoss > unmatchedThreshold && !it->isOccluded)
+                     : (it->consecutiveLoss > unmatchedThreshold);
+        }
+        if (remove) it = trackers.erase(it);
         else ++it;
     }
 }
 
-void TrackerManager::updateTrackersWithDetections(const Mat& frame, const vector<Segmentation>& detections, Mat depthMap) {
+void TrackerManager::updateTrackersWithDetections(const Mat& frame, vector<Segmentation>& detections) {
     currentFrame = frame;
+    matchingManager.currentFrame = frame;
+
     // Match detections to trackers
     auto matchResult = matchDetections(detections);
     for (auto& [trackIdx, detIdx] : matchResult.matches) {
@@ -45,36 +68,8 @@ void TrackerManager::updateTrackersWithDetections(const Mat& frame, const vector
         trackers[trackIdx].matchTracker(bbox, getDepth(detections[detIdx], depthMap), frame);
     }
 
-    // Try to match occluded trackers with new detections
-    set<int> matchedTrackers;
-    set<int> matchedDetections;
-    for (auto& trackIdx : matchResult.unmatchedTrackers) {
-        if (!trackers[trackIdx].isOccluded) continue;
-        for (auto& detIdx : matchResult.unmatchedDetections) {
-            if (matchedDetections.count(detIdx)) continue; // Skip if already matched
-            float distance = matchingManager.euclidean(trackers[trackIdx].bbox, toRect(detections[detIdx]));
-            float maxDistance = frame.cols * 0.1f;
-            if (distance <= maxDistance) {
-                trackers[trackIdx].matchTracker(toRect(detections[detIdx]),
-                                                getDepth(detections[detIdx], depthMap), frame);
-                matchResult.matches.emplace_back(trackIdx, detIdx);
-
-                matchedTrackers.insert(trackIdx);
-                matchedDetections.insert(detIdx);
-
-                cout << "Matched an occluded tracker" << endl;
-
-                break; // Break after matching one detection
-            }
-        }
-    }
-    for (int trackIdx : matchedTrackers) {
-        if (matchResult.unmatchedTrackers.count(trackIdx))
-            matchResult.unmatchedTrackers.erase(trackIdx);
-    }
-    for (int detIdx : matchedDetections) {
-        if (matchResult.unmatchedDetections.count(detIdx))
-            matchResult.unmatchedDetections.erase(detIdx);
+    if (config.occlusion == TrackerConfig::RELAXED_MATCHING) {
+        matchOccluded(matchResult, detections, depthMap);
     }
 
     // Create new trackers for unmatched detections
@@ -93,10 +88,50 @@ void TrackerManager::updateTrackersWithDetections(const Mat& frame, const vector
     }
 }
 
+
+void TrackerManager::matchOccluded(MatchingManager::MatchResult& matchResult,
+                                   const vector<Segmentation>& detections,
+                                   Mat depthMap) {
+        // Try to match occluded trackers with new detections
+    set<int> matchedTrackers;
+    set<int> matchedDetections;
+    for (auto& trackIdx : matchResult.unmatchedTrackers) {
+        if (!trackers[trackIdx].isOccluded) continue;
+        for (auto& detIdx : matchResult.unmatchedDetections) {
+            if (matchedDetections.count(detIdx)) continue; // Skip if already matched
+
+            float distance = matchingManager.euclidean(trackers[trackIdx].bbox, toRect(detections[detIdx]));
+            float distanceThreshold = std::sqrt(currentFrame.cols * currentFrame.cols +
+                    currentFrame.rows * currentFrame.rows) * 0.05f;
+
+            if (distance <= distanceThreshold) {
+                trackers[trackIdx].matchTracker(toRect(detections[detIdx]),
+                                                getDepth(detections[detIdx], depthMap), currentFrame);
+                matchResult.matches.emplace_back(trackIdx, detIdx);
+                matchedTrackers.insert(trackIdx);
+                matchedDetections.insert(detIdx);
+                cout << "Matched an occluded tracker" << endl;
+                break; // Break after matching one detection
+            }
+        }
+    }
+
+    for (int trackIdx : matchedTrackers) {
+        if (matchResult.unmatchedTrackers.count(trackIdx))
+            matchResult.unmatchedTrackers.erase(trackIdx);
+    }
+    for (int detIdx : matchedDetections) {
+        if (matchResult.unmatchedDetections.count(detIdx))
+            matchResult.unmatchedDetections.erase(detIdx);
+    }
+}
+
+
 void TrackerManager::drawTrackers(Mat& frame) {
     pair<float, float> depths = getMinMaxDepth();
     for (auto& tracker : trackers) tracker.draw(frame, depths.first, depths.second);
 }
+
 
 MatchingManager::MatchResult TrackerManager::matchDetections(const vector<Segmentation>& detections) {
     MatchingManager::MatchResult matchResult;
@@ -112,10 +147,22 @@ MatchingManager::MatchResult TrackerManager::matchDetections(const vector<Segmen
     return matchResult;
 }
 
-double TrackerManager::getDepth(Segmentation det, Mat depthMap) {
-    cv::Scalar meanDepth = cv::mean(depthMap, det.mask);
-    return meanDepth[0];
+
+void TrackerManager::outputTrackers(std::ofstream& out, int frameIdx) {
+    for (const auto& tracker : trackers) {
+        out << frameIdx + 1 << ","                // Frame number
+             << tracker.trackerNum << ","             // Tracker ID
+             << tracker.bbox.x << ","              // x
+             << tracker.bbox.y << ","              // y
+             << tracker.bbox.width << ","              // width
+             << tracker.bbox.height << ","              // height
+             << 1 << ","          // Confidence score (1.0 if N/A)
+             << -1 << ","                   // Optional (e.g., 3D pos) – set to -1
+             << -1 << ","                   // Optional
+             << -1 << std::endl;            // Optional
+    }
 }
+
 
 pair<float, float> TrackerManager::getMinMaxDepth() {
     float minVal, maxVal = 0.0f;

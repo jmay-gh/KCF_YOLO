@@ -83,8 +83,8 @@ the use of this software, even if advised of the possibility of such damage.
 #ifndef _KCFTRACKER_HEADERS
 #include "tracking/KCFTracking/kcftracker.hpp"
 #include "tracking/KCFTracking/ffttools.hpp"
-#include "tracking/KCFTracking/recttools.hpp"
 #include "tracking/KCFTracking/fhog.hpp"
+#include "tracking/KCFTracking/recttools.hpp"
 #include "tracking/KCFTracking/labdata.hpp"
 #endif
 
@@ -100,7 +100,6 @@ KCFTracker::KCFTracker(bool hog, bool fixed_window, bool multiscale, bool lab)
 
     // JACKS CODE ADDITION --------
     best_peak_value = 0.0f;
-    confidence = 1.0f;
     // ----------------------------
 
     if (hog) {    // HOG
@@ -241,26 +240,17 @@ cv::Point2f KCFTracker::detect(cv::Mat z, cv::Mat x, float &peak_value)
     cv::Mat k = gaussianCorrelation(x, z);
     cv::Mat res = (real(fftd(complexMultiplication(_alphaf, fftd(k)), true)));
 
+    // Jacks code addition -- to save the response map
+//    cv::FileStorage fs("response_map.yml", cv::FileStorage::WRITE);
+//    fs << "response" << res;
+//    fs.release();
+    // ----------------------------
+
     //minMaxLoc only accepts doubles for the peak, and integer points for the coordinates
     cv::Point2i pi;
     double pv;
     cv::minMaxLoc(res, NULL, &pv, NULL, &pi);
     peak_value = (float) pv;
-
-    // JACKS CODE ADDITION --------
-    // Calculate confidence
-//    if (scale_weight * peak_value > best_peak_value) {
-//        confidence = calculatePSR(res, pi, 3); // Calculate PSR for confidence
-//        // // Update tracker confidence
-//        // double minVal, maxVal;
-//        // cv::Point minLoc, maxLoc;
-//        // cv::minMaxLoc(res, &minVal, &maxVal, &minLoc, &maxLoc);
-//        // peak_value = static_cast<float>(maxVal);
-//        // // Normalization (example: divide by total sum)
-//        // float sumVal = static_cast<float>(cv::sum(res)[0]);
-//        // confidence = peak_value / (sumVal + 1e-6f); // to avoid division by zero
-//    }
-
 
     //subpixel peak estimation, coordinates will be non-integer
     cv::Point2f p((float)pi.x, (float)pi.y);
@@ -277,30 +267,6 @@ cv::Point2f KCFTracker::detect(cv::Mat z, cv::Mat x, float &peak_value)
     p.y -= (res.rows) / 2;
 
     return p;
-}
-
-// JACKS CODE ADDITION --------
-// Calculate peak to side lobe ratio for confidence
-float KCFTracker::calculatePSR(const cv::Mat& res, cv::Point peakLoc, int exclusionRadius) {
-    cv::Mat sidelobe;
-    int r = exclusionRadius;
-
-    // Mask excluding a small window around peak
-    cv::Mat mask = cv::Mat::ones(res.size(), CV_8U);
-    cv::circle(mask, peakLoc, r, cv::Scalar(0), -1);
-
-    // Extract sidelobe pixels
-    sidelobe = cv::Mat();
-    res.copyTo(sidelobe, mask);
-
-    cv::Scalar mean, stddev;
-    cv::meanStdDev(sidelobe, mean, stddev);
-
-    if (stddev[0] < 1e-5) // avoid division by zero
-        return 0.0f;
-
-    float psr = (res.at<float>(peakLoc) - static_cast<float>(mean[0])) / static_cast<float>(stddev[0]);
-    return psr;
 }
 
 
@@ -356,7 +322,7 @@ cv::Mat KCFTracker::gaussianCorrelation(cv::Mat x1, cv::Mat x2)
         rearrange(c);
         c = real(c);
     }
-    cv::Mat d; 
+    cv::Mat d;
     cv::max(( (cv::sum(x1.mul(x1))[0] + cv::sum(x2.mul(x2))[0])- 2. * c) / (size_patch[0]*size_patch[1]*size_patch[2]) , 0, d);
 
     cv::Mat k;
@@ -459,6 +425,15 @@ cv::Mat KCFTracker::getFeatures(const cv::Mat & image, bool inithann, float scal
         size_patch[1] = map->sizeX;
         size_patch[2] = map->numFeatures;
 
+//        // Jack Addition - storing raw feature map for EMD signature creation
+//        cv::Mat featureMap3D(map->sizeY, map->sizeX, CV_32FC(map->numFeatures), map->map);
+//        featureMap = featureMap3D.clone();
+
+        tmplCols = map->sizeX;
+        tmplRows = map->sizeY;
+        // -------
+
+
         FeaturesMap = cv::Mat(cv::Size(map->numFeatures,map->sizeX*map->sizeY), CV_32F, map->map);  // Procedure do deal with cv::Mat multichannel bug
         FeaturesMap = FeaturesMap.t();
         freeFeatureMapObject(&map);
@@ -525,7 +500,7 @@ cv::Mat KCFTracker::getFeatures(const cv::Mat & image, bool inithann, float scal
     return FeaturesMap;
 }
 
-const cv::Mat& KCFTracker::getTemplate() { return _tmpl; }
+cv::Mat& KCFTracker::getTemplate() { return _tmpl; }
 
 // Initialize Hanning window. Function called only in the first frame.
 void KCFTracker::createHanningMats()
@@ -565,4 +540,30 @@ float KCFTracker::subPixelPeak(float left, float center, float right)
         return 0;
     
     return 0.5 * (right - left) / divisor;
+}
+
+
+cv::Mat KCFTracker::extractFeaturesFromPatch(cv::Mat& patch, bool use_hog) {
+
+    if (patch.cols != _tmpl_sz.width || patch.rows != _tmpl_sz.height) {
+        cv::resize(patch, patch, _tmpl_sz);
+    }
+
+    cv::Mat FeaturesMap;
+    if (use_hog) {
+        IplImage z_ipl = cvIplImage(patch);
+        CvLSVMFeatureMapCaskade *map;
+        getFeatureMaps(&z_ipl, cell_size, &map);
+        normalizeAndTruncate(map, 0.2f);
+        PCAFeatureMaps(map);
+
+        FeaturesMap = cv::Mat(cv::Size(map->numFeatures,map->sizeX * map->sizeY), CV_32F, map->map).t();
+        freeFeatureMapObject(&map);
+    } else {
+        FeaturesMap = RectTools::getGrayImage(patch);
+        FeaturesMap -= 0.5f;
+    }
+    FeaturesMap = hann.mul(FeaturesMap);
+
+    return FeaturesMap;
 }

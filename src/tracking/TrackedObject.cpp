@@ -38,7 +38,7 @@ void TrackedObject::setFailure() { consecutiveFailures++; }
 // Reset failures to 0
 void TrackedObject::resetFailures() { consecutiveFailures = 0; }
 // Check if the failure threshold reached
-bool TrackedObject::checkFailures() { return consecutiveFailures >= 15; }
+bool TrackedObject::checkFailures() { return consecutiveFailures >= 12; }
 
 // Match tracker
 void TrackedObject::matchTracker(cv::Rect box, double meanDepth, const cv::Mat& frame) {

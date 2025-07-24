@@ -16,19 +16,25 @@ void UserInterface::run(TrackerConfig& config) {
     int testingSelected = 0;
     int emdWeightsSelected = 0;
     int emdSigSelected = 0;
+    int occlusionSelected = 0;
+    int removalSelected = 0;
 
     // --- Labels ---
     std::vector<std::string> trackerOptions = {"CoTracker", "KCF Tracker"};
-    std::vector<std::string> tab_labels = {"General", "Association", "Distance", "Output", "Testing"};
+    std::vector<std::string> tab_labels = {"General", "Association", "Distance", "Occlusions", "Removals", "Output", "Testing"};
 
     std::vector<std::string> kcftrackerOptions = {"Grayscale", "HOG", "HOG + LAB"};
     std::vector<std::string> associationOptions = {"Nearest Neighbour", "Hungarian Algorithm", "Ground Movers Distance"};
-    std::vector<std::string> distanceOptions = {"Euclidean Distance", "Cosine", "Intersection over Union"};
-    std::vector<std::string> outputOptions = {"Play live", "Save to file", "Both"};
-    std::vector<std::string> testingOptions = {"None", "MOT Accuracy"};
+    std::vector<std::string> distanceOptions = {"Euclidean Distance", "Cosine", "Intersection over Union", "HOG"};
+
+    std::vector<std::string> removalOptions = {"None", "Threshold Removal", "Strike Based Removal"};
+    std::vector<std::string> occlusionOptions = {"None", "Relaxed Removal", "Relaxed Matching", "Both"};
+
+    std::vector<std::string> outputOptions = {"Play live", "Save to file", "Both", "Results"};
+    std::vector<std::string> testingOptions = {"None", "MOT Accuracy", "MOT Accuracy Sweep"};
 
     std::vector<std::string> emdWeights = {"Equal weighting", "Confidence weighting"};
-    std::vector<std::string> emdSig = {"Distance", "Distance + Area", "HOG features"};
+    std::vector<std::string> emdSig = {"Distance", "Distance + Area", "HOG features", "3D Distance + Area"};
 
 
     // --- Components ---
@@ -38,6 +44,10 @@ void UserInterface::run(TrackerConfig& config) {
     auto kcftrackerDropdown = Radiobox(&kcftrackerOptions, &kcftrackerSelected);
     auto associationDropdown = Radiobox(&associationOptions, &associationSelected);
     auto distanceDropdown = Radiobox(&distanceOptions, &distanceSelected);
+
+    auto occlusionDropdown = Radiobox(&occlusionOptions, &occlusionSelected);
+    auto removalDropdown = Radiobox(&removalOptions, &removalSelected);
+
     auto outputDropdown = Radiobox(&outputOptions, &outputSelected);
     auto testingDropdown = Radiobox(&testingOptions, &testingSelected);
     auto emdWeightsDropdown = Radiobox(&emdWeights, &emdWeightsSelected);
@@ -56,6 +66,8 @@ void UserInterface::run(TrackerConfig& config) {
         kcftrackerDropdown,
         associationDropdown,
         distanceDropdown,
+        occlusionDropdown,
+        removalDropdown,
         outputDropdown,
         testingDropdown
     }, &tab_selected);
@@ -95,8 +107,8 @@ void UserInterface::run(TrackerConfig& config) {
             right_pane.push_back(separator());
             right_pane.push_back(text("EMD Weightings:"));
             right_pane.push_back(emdWeightsDropdown->Render());
-            right_pane.push_back(text("EMD Signatures:"));
             right_pane.push_back(separator());
+            right_pane.push_back(text("EMD Signatures:"));
             right_pane.push_back(emdSigDropdown->Render());
         }
 
@@ -123,6 +135,34 @@ void UserInterface::run(TrackerConfig& config) {
     config.setAssociation(associationSelected);
     config.setEMD(emdWeightsSelected, emdSigSelected);
     config.setDistance(distanceSelected);
+    config.setOcclusion(occlusionSelected);
+    config.setRemoval(removalSelected);
     config.setOutput(outputSelected);
     config.setTesting(testingSelected);
+
+    std::cout << "Tracker Type: " << trackerOptions[config.tracker] << std::endl;
+    std::cout << "KCF Tracker Type: " << kcftrackerOptions[config.HOG] << std::endl;
+    std::cout << "Association Method: " << associationOptions[config.association] << std::endl;
+    std::cout << "Distance Metric: " << distanceOptions[config.distance] << std::endl;
+    std::cout << "Output Type: " << outputOptions[config.output] << std::endl;
+    std::cout << "Testing Type: " << testingOptions[config.testing] << std::endl;
+    std::cout << "EMD Weighting: " << emdWeights[config.emdWeight] << std::endl;
+    std::cout << "EMD Signature: " << emdSig[config.emdSignature] << std::endl;
+    std::cout << "Occlusion Handling: " << occlusionOptions[config.occlusion] << std::endl;
+    std::cout << "Removal Type: " << removalOptions[config.removal] << std::endl;
+    std::cout << "Output Type: " << outputOptions[config.output] << std::endl;
+    std::cout << "Testing Type: " << testingOptions[config.testing] << std::endl;
 }
+//
+//void UserInterface::outputSettings(TrackerConfig& config) {
+//    std::cout << "Tracker Type: " << config.tracker << std::endl;
+//    std::cout << "Association Method: " << config.association << std::endl;
+//    std::cout << "Distance Metric: " << config.distance << std::endl;
+//    std::cout << "Output Type: " << config.output << std::endl;
+//    std::cout << "Testing Type: " << config.testing << std::endl;
+//    std::cout << "EMD Weighting: " << config.emdWeight << std::endl;
+//    std::cout << "EMD Signature: " << config.emdSignature << std::endl;
+//    std::cout << "Occlusion Handling: " << config.occlusion << std::endl;
+//    std::cout << "Removal Type: " << config.removal << std::endl;
+//}
+

@@ -7,7 +7,9 @@ using namespace std;
 using namespace trackingUtils;
 
 MatchingManager::MatchingManager(const TrackerConfig& config)
-        : config(config) { }
+        : config(config) {
+    iouThreshold = 0.5;
+}
 
 double MatchingManager::euclidean(const cv::Rect& aRect, const cv::Rect& bRect) {
     Point2d a = rectCenter(aRect); Point2d b = rectCenter(bRect);
@@ -23,6 +25,26 @@ double MatchingManager::iou(const cv::Rect& a, const cv::Rect& b) {
 double MatchingManager::inverseIou(const cv::Rect& a, const cv::Rect& b) {
     return 1.0f - iou(a, b);
 }
+
+
+double MatchingManager::peakResponse(TrackedObject& tracker, KCFTracker& detect, Rect detectBox) {
+
+    using namespace RectTools;
+
+    cv::Mat detectFeat = detect.getTemplate();
+    cv::Mat trackerFeat = tracker.tracker.getTemplate();
+
+//    cv::Mat detect_patch = RectTools::subwindow(currentFrame, detectBox, cv::BORDER_REPLICATE);
+//    Mat detectFeat = tracker.tracker.extractFeaturesFromPatch(detect_patch, true);
+
+    // Apply correlation
+    cv::Mat K = tracker.tracker.gaussianCorrelation(detectFeat, trackerFeat);
+    // Get max peak
+    double maxSim;
+    cv::minMaxLoc(K, nullptr, &maxSim);
+    return 1.0f - maxSim;
+}
+
 
 // NEAREST NEIGHBOUR ALGO
 MatchingManager::MatchResult MatchingManager::matchNN(vector<TrackedObject>& trackers,
@@ -52,8 +74,8 @@ MatchingManager::MatchResult MatchingManager::matchNN(vector<TrackedObject>& tra
 
         if (bestMatch != -1) {
             // Thresholding the match
-            if ((config.distance == TrackerConfig::DistanceType::EUCLIDEAN && bestDistance <= 50.0f) ||
-                (config.distance == TrackerConfig::DistanceType::IOU && (1.0f - bestDistance) >= 0.5f)) {
+            float iouResult = iou(trackers[i].bbox, toRect(detections[bestMatch]));
+            if (iouResult > iouThreshold) {
                 matchResult.matches.emplace_back(i, bestMatch);
                 matchResult.unmatchedTrackers.erase(i);
                 matchResult.unmatchedDetections.erase(bestMatch);
@@ -66,7 +88,8 @@ MatchingManager::MatchResult MatchingManager::matchNN(vector<TrackedObject>& tra
 
 // HUNGARIAN ALGO
 MatchingManager::MatchResult MatchingManager::matchHungarian(vector<TrackedObject>& trackers,
-                                     const vector<Segmentation>& detections) {
+                                                             const vector<Segmentation>& detections) {
+
     MatchResult matchResult = setMatchResult(trackers.size(), detections.size());
     if (trackers.size() == 0 || detections.size() == 0) return matchResult;
     // Create and solve cost matrix
@@ -81,7 +104,7 @@ MatchingManager::MatchResult MatchingManager::matchHungarian(vector<TrackedObjec
         for (int j = 0, m = detections.size(); j < m; ++j) {
             if (costMatrix(i, j) == 0.0f) {
                 float iouResult = iou(trackers[i].bbox, toRect(detections[j]));
-                if (iouResult >= 0.5f) {
+                if (iouResult > iouThreshold) {
                     matchResult.matches.emplace_back(i, j);
                     matchResult.unmatchedTrackers.erase(i);
                     matchResult.unmatchedDetections.erase(j);
@@ -95,19 +118,23 @@ MatchingManager::MatchResult MatchingManager::matchHungarian(vector<TrackedObjec
 }
 
 Matrix<float> MatchingManager::computeMatrix(vector<TrackedObject>& trackers,
-                            const vector<Segmentation>& detections) {
-    // Instantiate and populate Matrix
+                                             const vector<Segmentation>& detections) {
+    // Instantiate cost matrix
     Matrix<float> costMatrix(trackers.size(), detections.size());
-    for (int i = 0, n = trackers.size(); i < n; ++i) {
-        for (int j = 0, m = detections.size(); j < m; ++j) {
-            Rect trackRect = trackers[i].bbox;
-            Rect detectRect = toRect(detections[j]);
-
+    // Compute cost matrix
+    for (int j = 0, n = detections.size(); j < n; ++j) {
+        KCFTracker dummyTracker(config.HOG, config.FIXEDWINDOW, config.MULTISCALE, config.LAB);
+        for (int i = 0, m = trackers.size(); i < m; ++i) {
             if (config.distance == TrackerConfig::DistanceType::IOU) {
-                costMatrix(i, j) = inverseIou(trackRect, detectRect);
+                costMatrix(i, j) = inverseIou(trackers[i].bbox, toRect(detections[j]));
             }
             else if (config.distance == TrackerConfig::DistanceType::EUCLIDEAN) {
-                costMatrix(i, j) = euclidean(trackRect, detectRect);
+                costMatrix(i, j) = euclidean(trackers[i].bbox, toRect(detections[j]));
+            }
+            else if (config.distance == TrackerConfig::DistanceType::FEATUREMAPS) {
+                Rect detectBox = resizeRect(toRect(detections[j]), trackers[i].bbox.width, trackers[i].bbox.height);
+                dummyTracker.init(detectBox, currentFrame);
+                costMatrix(i, j) = peakResponse(trackers[i], dummyTracker, toRect(detections[j]));
             }
         }
     }
@@ -121,83 +148,109 @@ Matrix<float> MatchingManager::computeMatrix(vector<TrackedObject>& trackers,
 MatchingManager::MatchResult MatchingManager::matchEMD(vector<TrackedObject>& trackers,
                                                 const vector<Segmentation>& detections,
                                                 Mat& frame) {
+
     MatchResult matchResult = setMatchResult(trackers.size(), detections.size());
     if (trackers.size() == 0 || detections.size() == 0) return matchResult;
 
     // Calculate flow matrix
-    Mat flow = computeFlow(trackers, detections, frame);
+    vector<int> outTrackLabels, outDetectionLabels;
 
-    // Convert flow (maximization) to cost matrix (minimization)
-    int rows = flow.rows;
-    int cols = flow.cols;
-    Matrix<float> costMatrix(rows, cols);
+    Mat flow = computeFlow(trackers, detections, frame, outTrackLabels, outDetectionLabels);
 
-    float maxFlow = 0.0f;
-    for (int i = 0; i < rows; ++i)
-        for (int j = 0; j < cols; ++j)
-            maxFlow = std::max(maxFlow, flow.at<float>(i, j));
+//
+//    // Convert flow (maximization) to cost matrix (minimization)
+//    int rows = flow.rows;
+//    int cols = flow.cols;
+//    Matrix<float> costMatrix(rows, cols);
+//
+//    float maxFlow = 0.0f;
+//    for (int i = 0; i < rows; ++i)
+//        for (int j = 0; j < cols; ++j)
+//            maxFlow = std::max(maxFlow, flow.at<float>(i, j));
+//
+//    // Fill cost matrix with (maxFlow - actualFlow) to minimize cost
+//    for (int i = 0; i < rows; ++i)
+//        for (int j = 0; j < cols; ++j)
+//            costMatrix(i, j) = maxFlow - flow.at<float>(i, j);
+//
+//    // Solve assignment
+//    Munkres<float> munkres;
+//    munkres.solve(costMatrix);
+//
+//    // Parse results
+//    for (int i = 0, n = trackers.size(); i < n; ++i) {
+//        trackers[i].setUnmatched();
+//        for (int j = 0, m = detections.size(); j < m; ++j) {
+//            if (costMatrix(i, j) <= 0.03f && matchResult.unmatchedDetections.count(j)) {
+//                float iouResult = iou(trackers[i].bbox, toRect(detections[j]));
+//                if (iouResult >= 0.5f) {
+//                    matchResult.matches.emplace_back(i, j);
+//                    matchResult.unmatchedTrackers.erase(i);
+//                    matchResult.unmatchedDetections.erase(j);
+//                    trackers[i].setMatched();
+//                    break;
+//                }
+//            }
+//        }
+//    }
 
-    // Fill cost matrix with (maxFlow - actualFlow) to minimize cost
-    for (int i = 0; i < rows; ++i)
-        for (int j = 0; j < cols; ++j)
-            costMatrix(i, j) = maxFlow - flow.at<float>(i, j);
-
-    // Solve assignment
-    Munkres<float> munkres;
-    munkres.solve(costMatrix);
-
-    // Parse results
-    for (int i = 0, n = trackers.size(); i < n; ++i) {
-        trackers[i].setUnmatched();
-        for (int j = 0, m = detections.size(); j < m; ++j) {
-            if (costMatrix(i, j) <= 0.03f && matchResult.unmatchedDetections.count(j)) {
-                float iouResult = iou(trackers[i].bbox, toRect(detections[j]));
-                if (iouResult >= 0.5f) {
-                    matchResult.matches.emplace_back(i, j);
-                    matchResult.unmatchedTrackers.erase(i);
-                    matchResult.unmatchedDetections.erase(j);
-                    trackers[i].setMatched();
-                    break;
-                }
-            }
-        }
-    }
-
-//    std::vector<std::tuple<int, int, float>> flowEntries;
-//    // Flatten flow matrix to triplets
+//    std::map<std::pair<int, int>, float> objectFlow;
 //    for (int i = 0; i < flow.rows; ++i) {
 //        for (int j = 0; j < flow.cols; ++j) {
 //            float f = flow.at<float>(i, j);
 //            if (f > 0.0f) {
-//                flowEntries.emplace_back(i, j, f);
+//                int track_id = outTrackLabels[i];
+//                int det_id   = outDetectionLabels[j];
+//                objectFlow[{track_id, det_id}] += f;
 //            }
 //        }
 //    }
+
+//    std::vector<std::pair<std::pair<int, int>, float>> sortedFlowEntries(
+//            objectFlow.begin(), objectFlow.end()
+//    );
 //
-//    // Sort by descending flow value
-//    std::sort(flowEntries.begin(), flowEntries.end(), [](const auto& a, const auto& b)
-//    { return std::get<2>(a) > std::get<2>(b); });
-//
-//    // Assign matches greedily in 1-to-1
-//    for (const auto& [i, j, flowVal] : flowEntries) {
-//        if (matchResult.unmatchedTrackers.count(i) && matchResult.unmatchedDetections.count(j)) {
-//            // Threshold the match (no good otherwise)
-//            float iou = distances::iou(trackers[i].bbox, toRect(detections[j]));
-//            if (iou > 0.5f) {
-//                matchResult.matches.emplace_back(i, j);
-//                matchResult.unmatchedTrackers.erase(i);
-//                matchResult.unmatchedDetections.erase(j);
-//                trackers[i].setMatched();
-//            }
-//        }
-//    }
+//    // Sort by value in descending order
+//    std::sort(sortedFlowEntries.begin(), sortedFlowEntries.end(),
+//              [](const auto& a, const auto& b) {
+//                  return a.second > b.second;
+//              });
+
+    std::vector<std::tuple<int, int, float>> flowEntries;
+    for (int i = 0; i < flow.rows; ++i) {
+        for (int j = 0; j < flow.cols; ++j) {
+            float f = flow.at<float>(i, j);
+            if (f > 0.0f) {
+                flowEntries.emplace_back(i, j, f);
+            }
+        }
+    }
+
+    std::sort(flowEntries.begin(), flowEntries.end(), [](const auto& a, const auto& b) {
+        return std::get<2>(a) > std::get<2>(b);
+    });
+
+    for (const auto& [i, j, flowVal] : flowEntries) {
+        if (matchResult.unmatchedTrackers.count(i) && matchResult.unmatchedDetections.count(j)) {
+            float iouResult = iou(trackers[i].bbox, toRect(detections[j]));
+            if (iouResult > iouThreshold) {
+                matchResult.matches.emplace_back(i, j);
+                matchResult.unmatchedTrackers.erase(i);
+                matchResult.unmatchedDetections.erase(j);
+                trackers[i].setMatched();
+            }
+        }
+    }
     return matchResult;
 }
 
 // Calculate flow matrix
 Mat MatchingManager::computeFlow(vector<TrackedObject>& trackers,
                 const vector<Segmentation>& detections,
-                Mat& frame) {
+                Mat& frame,
+                std::vector<int>& outTrackLabels,
+                std::vector<int>& outDetectionLabels) {
+
     // Get weights
     vector<float> trackWeights, detectWeights;
     if (config.emdWeight == TrackerConfig::EMDWeight::UNIFORM) {
@@ -212,15 +265,23 @@ Mat MatchingManager::computeFlow(vector<TrackedObject>& trackers,
     // Get signatures
     cv::Mat sig1, sig2;
     if (config.emdSignature == TrackerConfig::EMDSignature::DISTANCE ||
-        config.emdSignature == TrackerConfig::EMDSignature::AREA) {
+        config.emdSignature == TrackerConfig::EMDSignature::AREA ||
+        config.emdSignature == TrackerConfig::EMDSignature::Z_DIST_AREA) {
         // Get center matrix
-        vector<Rect> trackRects = collectRects(trackers);
-        vector<Rect> detectRects = collectRects(detections);
+        vector<pair<Rect, float>> trackRects = collectRects(trackers);
+        vector<pair<Rect, float>> detectRects = collectRects(detections);
         sig1 = computeSignature(trackRects, trackWeights);
         sig2 = computeSignature(detectRects, detectWeights);
+
+        // Calculate flow
+        Mat flow;
+        float emd = EMD(sig1, sig2, cv::DIST_L2, noArray(), 0, flow);
+        return flow;
     }
     else if (config.emdSignature == TrackerConfig::EMDSignature::AVERAGE_HOG) {
+        Mat costMatrix(trackers.size(), detections.size(), CV_32F);
         std::vector<cv::Mat> trackerHOGs, detectHOGs;
+        vector<int> trackerHOGCols, detectHOGCols;
         for (auto& t : trackers) {
             trackerHOGs.push_back(spatialPoolHOG(t.tracker.getTemplate()));
         }
@@ -228,13 +289,35 @@ Mat MatchingManager::computeFlow(vector<TrackedObject>& trackers,
             // Instantiate a temp tracker of the detection to get HOG features
             KCFTracker tempTracker(config.HOG, config.FIXEDWINDOW, config.MULTISCALE, config.LAB);
             tempTracker.init(trackingUtils::toRect(d), frame);
-            tempTracker.update(frame);
             detectHOGs.push_back(spatialPoolHOG(tempTracker.getTemplate()));
         }
         sig1 = computeHOGSignature(trackerHOGs, trackWeights);
         sig2 = computeHOGSignature(detectHOGs, detectWeights);
     }
+    else {
+        Mat costMatrix(trackers.size(), detections.size(), CV_32F);
+        std::vector<cv::Mat> trackerHOGs, detectHOGs;
+        vector<int> trackerHOGCols, detectHOGCols;
 
+        for (auto &t: trackers) {
+//            trackerHOGs.push_back(spatialPoolHOG(t.tracker.getTemplate()));
+
+            trackerHOGs.push_back(t.tracker.getTemplate());
+            trackerHOGCols.push_back(t.tracker.tmplCols);
+        }
+        for (auto &d: detections) {
+            // Instantiate a temp tracker of the detection to get HOG features
+            KCFTracker tempTracker(config.HOG, config.FIXEDWINDOW, config.MULTISCALE, config.LAB);
+            tempTracker.init(trackingUtils::toRect(d), frame);
+
+//            detectHOGs.push_back(spatialPoolHOG(tempTracker.getTemplate()));
+
+            detectHOGs.push_back(tempTracker.getTemplate());
+            detectHOGCols.push_back(tempTracker.tmplCols);
+        }
+        sig1 = newSignatureApproach(trackerHOGs, trackerHOGCols, outTrackLabels);
+        sig2 = newSignatureApproach(detectHOGs, detectHOGCols, outDetectionLabels);
+    }
     // Calculate flow
     Mat flow;
     float emd = EMD(sig1, sig2, cv::DIST_L2, noArray(), 0, flow);
@@ -257,40 +340,48 @@ std::vector<float> MatchingManager::collectWeights(const vector<T>& objects) {
 }
 
 
-vector<Rect> MatchingManager::collectRects(const vector<TrackedObject>& objects) {
-    vector<Rect> rects;
+vector<pair<Rect, float>> MatchingManager::collectRects(const vector<TrackedObject>& objects) {
+    vector<pair<Rect, float>> rects;
     for (const auto& obj : objects)
-        rects.push_back(obj.bbox);
+        rects.push_back({obj.bbox, obj.depth});
     return rects;
 }
 
-vector<Rect> MatchingManager::collectRects(const vector<Segmentation>& objects) {
-    vector<Rect> rects;
+vector<pair<Rect, float>> MatchingManager::collectRects(const vector<Segmentation>& objects) {
+    vector<pair<Rect, float>> rects;
     for (const auto& obj : objects)
-        rects.push_back(toRect(obj));
+        rects.push_back({toRect(obj), obj.depth});
     return rects;
 }
 
 
-Mat MatchingManager::computeSignature(vector<Rect>& boxes, vector<float> weights) {
+Mat MatchingManager::computeSignature(vector<pair<Rect, float>>& boxes, vector<float> weights) {
     // Instantiate signature
     size_t n = boxes.size();
     Mat signature;
-    if (config.emdSignature == TrackerConfig::EMDSignature::DISTANCE) {
-        signature = Mat(n, 3, CV_32F);
+    int cols = 3;
+    if (config.emdSignature == TrackerConfig::EMDSignature::AREA ||
+        config.emdSignature == TrackerConfig::EMDSignature::Z_DIST_AREA) {
+        cols += 2;
     }
-    else {
-        signature = Mat(n, 5, CV_32F);
+    if (config.emdSignature == TrackerConfig::EMDSignature::Z_DIST_AREA) {
+        cols += 1;
     }
+    signature = Mat(n, cols, CV_32F);
+
     // Populate signature
     for (size_t i = 0; i < n; ++i) {
-        Point2d center = rectCenter(boxes[i]);
+        Point2d center = rectCenter(boxes[i].first);
         signature.at<float>(i, 0) = weights[i];
         signature.at<float>(i, 1) = center.x;
         signature.at<float>(i, 2) = center.y;
         if (config.emdSignature == TrackerConfig::EMDSignature::AREA) {
-            signature.at<float>(i, 3) = boxes[i].width;
-            signature.at<float>(i, 4) = boxes[i].height;
+            signature.at<float>(i, 3) = boxes[i].first.width;
+            signature.at<float>(i, 4) = boxes[i].first.height;
+        }
+        if (config.emdSignature == TrackerConfig::EMDSignature::Z_DIST_AREA) {
+            // Assuming depth is stored in the tracker, otherwise modify accordingly
+            signature.at<float>(i, cols - 1) = boxes[i].second;
         }
     }
     return signature;
@@ -317,11 +408,12 @@ cv::Mat MatchingManager::computeHOGSignature(const std::vector<cv::Mat>& hogDesc
 
 
 cv::Mat MatchingManager::spatialPoolHOG(const cv::Mat& tmpl) {
-    int gridRows = 2;
-    int gridCols = 2;
+    int gridRows = 4;
+    int gridCols = 4;
     int numFeatures = tmpl.rows; // 31
     int numCells = tmpl.cols;    // N
     int poolSize = gridRows * gridCols;
+
     int cellsPerRegion = numCells / poolSize;
     cv::Mat pooled(1, numFeatures * poolSize, CV_32F);
 
@@ -371,3 +463,108 @@ MatchingManager::MatchResult MatchingManager::setMatchResult(int trackerSize, in
     }
     return initMatchResult;
 }
+
+
+Mat MatchingManager::newSignatureApproach(const std::vector<cv::Mat>& hogDescriptors, vector<int> hogSizes, vector<int>& objectIds) {
+
+    long long size = 0;
+    for (int i = 0; i < hogDescriptors.size(); ++i) {
+        cout << hogDescriptors[i].cols << endl;
+        size += (hogDescriptors[i].cols * 9);
+    }
+
+    Mat signature(size, 4, CV_32F);
+    // Iterate all HOGS
+    int totalRow = 0;
+    for (int i = 0; i < hogDescriptors.size(); ++i) {
+        // Iterate the rows
+
+        for (int j = 0; j < hogDescriptors[i].cols; ++j) {
+            // Iterate the orientations
+            int x = j % hogSizes[i];
+            int y = j / hogSizes[i];
+
+            float weight = 0;
+            float angle = 0;
+            for (int k = 0; k < 9; ++k) {
+                int baseIndex = 31 - 9; // last 9 bins start here
+                float currWeight = hogDescriptors[i].at<float>(baseIndex + k, j);
+
+                if (currWeight > weight) {
+                    weight = currWeight;
+                    angle = static_cast<float>(k) * 20.0f;
+                }
+            }
+            if (weight < 0) cout << weight << endl;
+
+            signature.at<float>(totalRow, 0) = weight;
+            signature.at<float>(totalRow, 1) = x;
+            signature.at<float>(totalRow, 2) = y;
+            signature.at<float>(totalRow, 3) = angle;
+            totalRow++;
+            objectIds.push_back(i);
+        }
+    }
+    return signature;
+}
+
+
+
+
+
+
+
+
+
+//
+//Mat MatchingManager::resizeMap(const Mat& input) {
+//    Mat output(6, 6, CV_32F);
+//
+//    // Create complex input
+//    Mat complexInput;
+//    cv::dft(input, complexInput, cv::DFT_COMPLEX_OUTPUT);
+//
+//    // Shift input
+//    Mat shiftedInput;
+//    cv::dft(complexInput, shiftedInput, cv::DFT_COMPLEX_OUTPUT | cv::DFT_SCALE);
+//    Mat fftShifted;
+//    cv::dft(shiftedInput, fftShifted, cv::DFT_COMPLEX_OUTPUT);
+//
+//    // Center input
+//    Mat centeredInput = fftshift(fftShifted);
+//
+//    // Crop or pad depending on size
+//    cv::Size outputSize(6, 6);
+//    Mat resizedInput = fourierCropOrPad(centeredInput, outputSize);
+//
+//    // Reshift the output -- maybe not needed as symmetric?
+//    cv::Mat reshiftInput = fftshift(resizedInput);
+//
+//    cv::Mat inverse;
+//    cv::dft(reshiftInput, inverse, cv::DFT_INVERSE | cv::DFT_REAL_OUTPUT | cv::DFT_SCALE);
+//
+//    // Gain adjustment
+//    float gain = (float)(outputSize.width * outputSize.height) / (input.cols * input.rows);
+//    inverse *= gain;
+//
+//    return inverse;
+//}
+
+//
+//cv::Mat MatchingManager::fourierCropOrPad(const cv::Mat& input, cv::Size targetSize) {
+//    cv::Mat output = cv::Mat::zeros(targetSize, input.type());
+//
+//    int minRows = std::min(input.rows, targetSize.height);
+//    int minCols = std::min(input.cols, targetSize.width);
+//
+//    int yOffsetIn = (input.rows - minRows) / 2;
+//    int xOffsetIn = (input.cols - minCols) / 2;
+//
+//    int yOffsetOut = (targetSize.height - minRows) / 2;
+//    int xOffsetOut = (targetSize.width - minCols) / 2;
+//
+//    input(cv::Rect(xOffsetIn, yOffsetIn, minCols, minRows))
+//            .copyTo(output(cv::Rect(xOffsetOut, yOffsetOut, minCols, minRows)));
+//
+//    return output;
+//}
