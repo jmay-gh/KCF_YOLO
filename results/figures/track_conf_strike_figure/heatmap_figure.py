@@ -5,13 +5,12 @@ import matplotlib.cm as cm
 
 # Example values between 30 and 40
 data = np.array([
-[0.34930, 0.36019, 0.34643, 0.30901],
-[0.35934, 0.37072, 0.36165, 0.32759],
-[0.35934, 0.37072, 0.36165, 0.32759],
-[0.35934, 0.37072, 0.36165, 0.32759],
+[0.34756, 0.35474, 0.35772, 0.36031, 0.36119],
+[0.36443, 0.36642, 0.36718, 0.36690, 0.36661],
+[0.36561, 0.36256, 0.36041, 0.35790, 0.35691]
 ])
 
-fig, ax = plt.subplots(figsize=(4, 4))  # Square figure
+fig, ax = plt.subplots(figsize=(4, 6))  # Square figure
 
 # Get a lighter subset of the Blues colormap
 cmap = cm.get_cmap('Blues', 256)
@@ -24,7 +23,7 @@ ax.set_aspect('equal')  # Ensure square grid cells
 # Add labels into center of cells
 for i in range(data.shape[0]):
     for j in range(data.shape[1]):
-        text = f"{data[i, j]:.2f}"  # Format with 2 decimal places
+        text = f"{data[i, j]:.3f}"  # Format with 2 decimal places
         ax.text(j, i, text, ha='center', va='center', color='black', fontsize=10)
 
 # Add colorbar using separate axis
@@ -40,8 +39,8 @@ ax.set_xticks(np.arange(num_cols))
 ax.set_yticks(np.arange(num_rows))
 
 # Optional: add tick labels
-ax.set_xticklabels([f'{i:.2f}' for i in np.arange(0.15, 0.46, 0.10)])
-ax.set_yticklabels([f'{i:.2f}' for i in np.arange(0.45, 0.14, -0.10)])
+ax.set_xticklabels([f'{i:.2f}' for i in np.arange(5, 18, 3)])
+ax.set_yticklabels([f'{i:.2f}' for i in np.arange(0.45, 0.24, -0.10)])
 
 # Show gridlines between cells
 ax.set_xticks(np.arange(num_cols+1)-0.5, minor=True)
