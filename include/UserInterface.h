@@ -8,4 +8,5 @@ class UserInterface {
 public:
     UserInterface();
     void run(TrackerConfig& config);
+//    void outputSettings(TrackerConfig& config);
 };

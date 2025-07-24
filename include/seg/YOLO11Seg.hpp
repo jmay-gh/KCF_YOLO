@@ -94,6 +94,8 @@ struct Segmentation {
     float       conf{0.f};
     int         classId{0};
     cv::Mat     mask;  // Single-channel (8UC1) mask in full resolution
+
+    float depth;
 };
 
 // ============================================================================

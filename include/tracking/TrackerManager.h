@@ -16,10 +16,16 @@ class TrackerManager {
         vector<TrackedObject> trackers;
         Mat& currentFrame;
         MatchingManager matchingManager;
+        float trackConfThreshold;
+        float detectConfThreshold;
+        int unmatchedThreshold;
+
+        Mat depthMap;
 
         void updateTrackers(const Mat& frame);
-        void updateTrackersWithDetections(const Mat& frame, const vector<Segmentation>& detections, Mat depthMap);
+        void updateTrackersWithDetections(const Mat& frame, vector<Segmentation>& detections);
         void drawTrackers(Mat& frame);
+        void outputTrackers(std::ofstream& out, int frameIdx);
         pair<float, float> getMinMaxDepth();
 
     private:
@@ -28,8 +34,13 @@ class TrackerManager {
         vector<string> classNames;
 
         MatchingManager::MatchResult matchDetections(const vector<Segmentation>& detections);
+
+        void matchOccluded(MatchingManager::MatchResult& matchResult,
+                           const vector<Segmentation>& detections,
+                           Mat depthMap);
+
         Matrix<float> solveCostMatrix(vector<Segmentation> detections);
         vector<int> findUnmatchedDetections(const vector<pair<int, int>>& matches, int totalDetections);
-        double getDepth(Segmentation det, Mat depthMap);
+//        double getDepth(Segmentation det, Mat depthMap);
 
 };

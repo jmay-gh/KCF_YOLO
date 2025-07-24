@@ -18,25 +18,41 @@ public:
     enum DistanceType {
         EUCLIDEAN,
         COSINE,
-        IOU
+        IOU,
+        FEATUREMAPS
     };
     enum OutputType {
         SHOW,
         SAVE,
-        BOTH
+        BOTH,
+        RESULTS
     };
     enum TestingType {
         NONE,
         MOT_ACCURACY,
+        MOT_SWEEP
     };
     enum EMDWeight {
         UNIFORM,
         CONFIDENCE
     };
+    enum OcclusionType {
+        NO_OCCLUSION,
+        RELAXED_REMOVAL,
+        RELAXED_MATCHING,
+        REMOVAL_AND_MATCHING
+    };
+    enum RemovalType {
+        NO_REMOVAL,
+        THRESHOLD,
+        STRIKE_BASED
+    };
+
     enum EMDSignature {
         DISTANCE,
         AREA,
-        AVERAGE_HOG
+        AVERAGE_HOG,
+        Z_DIST_AREA
     };
 
     DistanceType distance;
@@ -46,6 +62,8 @@ public:
     TestingType testing;
     EMDWeight emdWeight;
     EMDSignature emdSignature;
+    OcclusionType occlusion;
+    RemovalType removal;
 
     bool HOG;
     bool FIXEDWINDOW;
@@ -60,4 +78,6 @@ public:
     void setOutput(int outputSelected);
     void setTesting(int testingSelected);
     void setEMD(int emdWeightSelected, int emdSignatureSelected);
+    void setOcclusion(int occlusionSelected);
+    void setRemoval(int removalSelected);
 };

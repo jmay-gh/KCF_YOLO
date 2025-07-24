@@ -59,7 +59,7 @@ void rearrange(cv::Mat &img);
 void normalizedLogTransform(cv::Mat &img);
 
 
-cv::Mat fftd(cv::Mat img, bool backwards)
+inline cv::Mat fftd(cv::Mat img, bool backwards)
 {
 /*
 #ifdef USE_FFTW
@@ -123,21 +123,21 @@ cv::Mat fftd(cv::Mat img, bool backwards)
 
 }
 
-cv::Mat real(cv::Mat img)
+inline cv::Mat real(cv::Mat img)
 {
     std::vector<cv::Mat> planes;
     cv::split(img, planes);
     return planes[0];
 }
 
-cv::Mat imag(cv::Mat img)
+inline cv::Mat imag(cv::Mat img)
 {
     std::vector<cv::Mat> planes;
     cv::split(img, planes);
     return planes[1];
 }
 
-cv::Mat magnitude(cv::Mat img)
+inline cv::Mat magnitude(cv::Mat img)
 {
     cv::Mat res;
     std::vector<cv::Mat> planes;
@@ -148,7 +148,7 @@ cv::Mat magnitude(cv::Mat img)
     return res;
 }
 
-cv::Mat complexMultiplication(cv::Mat a, cv::Mat b)
+inline cv::Mat complexMultiplication(cv::Mat a, cv::Mat b)
 {
     std::vector<cv::Mat> pa;
     std::vector<cv::Mat> pb;
@@ -165,7 +165,7 @@ cv::Mat complexMultiplication(cv::Mat a, cv::Mat b)
     return res;
 }
 
-cv::Mat complexDivision(cv::Mat a, cv::Mat b)
+inline cv::Mat complexDivision(cv::Mat a, cv::Mat b)
 {
     std::vector<cv::Mat> pa;
     std::vector<cv::Mat> pb;
@@ -184,7 +184,7 @@ cv::Mat complexDivision(cv::Mat a, cv::Mat b)
     return res;
 }
 
-void rearrange(cv::Mat &img)
+inline void rearrange(cv::Mat &img)
 {
     // img = img(cv::Rect(0, 0, img.cols & -2, img.rows & -2));
     int cx = img.cols / 2;
@@ -226,7 +226,7 @@ cv::Mat fouriertransFull(const cv::Mat & in)
     return t;
 }*/
 
-void normalizedLogTransform(cv::Mat &img)
+inline void normalizedLogTransform(cv::Mat &img)
 {
     img = cv::abs(img);
     img += cv::Scalar::all(1);

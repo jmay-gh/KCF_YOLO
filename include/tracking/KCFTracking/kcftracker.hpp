@@ -101,7 +101,7 @@ public:
     virtual cv::Rect update(cv::Mat image);
 
     // JACK ADDITION ----
-    const cv::Mat& getTemplate();
+    cv::Mat& getTemplate();
     // ----
 
     float interp_factor; // linear interpolation factor for adaptation
@@ -117,23 +117,23 @@ public:
 
     // JACKS CODE ADDITION --------
     float best_peak_value; // best peak value found in the current frame
-    float confidence; // confidence of the tracker
+    cv::Mat featureMap; // feature map for the current frame
+    int tmplRows;
+    int tmplCols;
     // ----------------------------
 
+
+    // Evaluates a Gaussian kernel with bandwidth SIGMA for all relative shifts between input images X and Y, which must both be MxN. They must    also be periodic (ie., pre-processed with a cosine window).
+    cv::Mat gaussianCorrelation(cv::Mat x1, cv::Mat x2);
+    cv::Mat extractFeaturesFromPatch(cv::Mat& patch, bool use_hog);
 
 protected:
-    // Detect object in the current frame.
-    cv::Point2f detect(cv::Mat z, cv::Mat x, float &peak_value);
-
-    // JACKS CODE ADDITION --------
-    float calculatePSR(const cv::Mat& res, cv::Point peakLoc, int exclusionRadius);
-    // ----------------------------
 
     // train tracker with a single image
     void train(cv::Mat x, float train_interp_factor);
 
-    // Evaluates a Gaussian kernel with bandwidth SIGMA for all relative shifts between input images X and Y, which must both be MxN. They must    also be periodic (ie., pre-processed with a cosine window).
-    cv::Mat gaussianCorrelation(cv::Mat x1, cv::Mat x2);
+    // Detect object in the current frame.
+    cv::Point2f detect(cv::Mat z, cv::Mat x, float &peak_value);
 
     // Create Gaussian Peak. Function called only in the first frame.
     cv::Mat createGaussianPeak(int sizey, int sizex);
