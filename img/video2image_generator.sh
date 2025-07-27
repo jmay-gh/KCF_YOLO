@@ -26,7 +26,7 @@ mkdir -p "$INPUT_FILE_BASENAME/image_files"
 mkdir -p "$INPUT_FILE_BASENAME/video_file"
 
 # Extract images using ffmpeg
-ffmpeg -i "$INPUT_FILE" -vf fps=20 "$INPUT_FILE_BASENAME/image_files/%04d.jpg"
+ffmpeg -i "$INPUT_FILE" "$INPUT_FILE_BASENAME/image_files/%04d.jpg"
 
 # Move original video into video_file/
 mv "$INPUT_FILE" "$INPUT_FILE_BASENAME/video_file/"
