@@ -98,10 +98,6 @@ KCFTracker::KCFTracker(bool hog, bool fixed_window, bool multiscale, bool lab)
     //output_sigma_factor = 0.1;
     output_sigma_factor = 0.125;
 
-    // JACKS CODE ADDITION --------
-    best_peak_value = 0.0f;
-    // ----------------------------
-
     if (hog) {    // HOG
         // VOT
         interp_factor = 0.012;
@@ -175,8 +171,6 @@ void KCFTracker::init(const cv::Rect &roi, cv::Mat image)
 // Update position based on the new frame
 cv::Rect KCFTracker::update(cv::Mat image)
 {
-    best_peak_value = 0.0f;
-
     if (_roi.x + _roi.width <= 0) _roi.x = -_roi.width + 1;
     if (_roi.y + _roi.height <= 0) _roi.y = -_roi.height + 1;
     if (_roi.x >= image.cols - 1) _roi.x = image.cols - 2;

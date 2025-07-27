@@ -1,11 +1,11 @@
-#include "../../include/UserInterface.h"
+#include "userSetup/UserInterface.h"
 
 using namespace ftxui;
 
 UserInterface::UserInterface() { }
 
 
-void UserInterface::run(TrackerConfig& config) {
+void UserInterface::run(UserConfig& config) {
     // --- State Variables ---
     int trackerSelected = 1;
     int tab_selected = 0;
@@ -153,16 +153,5 @@ void UserInterface::run(TrackerConfig& config) {
     std::cout << "Output Type: " << outputOptions[config.output] << std::endl;
     std::cout << "Testing Type: " << testingOptions[config.testing] << std::endl;
 }
-//
-//void UserInterface::outputSettings(TrackerConfig& config) {
-//    std::cout << "Tracker Type: " << config.tracker << std::endl;
-//    std::cout << "Association Method: " << config.association << std::endl;
-//    std::cout << "Distance Metric: " << config.distance << std::endl;
-//    std::cout << "Output Type: " << config.output << std::endl;
-//    std::cout << "Testing Type: " << config.testing << std::endl;
-//    std::cout << "EMD Weighting: " << config.emdWeight << std::endl;
-//    std::cout << "EMD Signature: " << config.emdSignature << std::endl;
-//    std::cout << "Occlusion Handling: " << config.occlusion << std::endl;
-//    std::cout << "Removal Type: " << config.removal << std::endl;
-//}
+
 

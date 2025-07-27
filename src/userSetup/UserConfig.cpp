@@ -1,23 +1,23 @@
-#include "../../include/tracking/TrackerConfig.h"
+#include "userSetup/UserConfig.h"
 
-TrackerConfig::TrackerConfig() { }
+UserConfig::UserConfig() { }
 
-void TrackerConfig::setAssociation(int associationSelected) {
+void UserConfig::setAssociation(int associationSelected) {
     // Set the association method
     association = static_cast<AssociationMethod>(associationSelected);
 }
 
-void TrackerConfig::setEMD(int emdWeightSelected, int emdSignatureSelected) {
+void UserConfig::setEMD(int emdWeightSelected, int emdSignatureSelected) {
     emdWeight = static_cast<EMDWeight>(emdWeightSelected);
     emdSignature = static_cast<EMDSignature>(emdSignatureSelected);
 }
 
-void TrackerConfig::setTracker(int trackerSelected) {
+void UserConfig::setTracker(int trackerSelected) {
     // Set the tracker type
     tracker = static_cast<TrackerType>(trackerSelected);
 }
 
-void TrackerConfig::setKCFTracker(int kcftrackerSelected) {
+void UserConfig::setKCFTracker(int kcftrackerSelected) {
     if (kcftrackerSelected == 0) { HOG = false; LAB = false; }
     else if (kcftrackerSelected == 1) { HOG = true; LAB = false; }
     else if (kcftrackerSelected == 2) { HOG = true; LAB = true; }
@@ -25,27 +25,27 @@ void TrackerConfig::setKCFTracker(int kcftrackerSelected) {
     FIXEDWINDOW = true;
 }
 
-void TrackerConfig::setDistance(int distanceSelected) {
+void UserConfig::setDistance(int distanceSelected) {
     // Set the distance metric
     distance = static_cast<DistanceType>(distanceSelected);
 }
 
-void TrackerConfig::setOcclusion(int occlusionSelected) {
+void UserConfig::setOcclusion(int occlusionSelected) {
     // Set the occlusion handling type
     occlusion = static_cast<OcclusionType>(occlusionSelected);
 }
 
-void TrackerConfig::setRemoval(int removalSelected) {
+void UserConfig::setRemoval(int removalSelected) {
     // Set the removal type
     removal = static_cast<RemovalType>(removalSelected);
 }
 
-void TrackerConfig::setOutput(int outputSelected) {
+void UserConfig::setOutput(int outputSelected) {
     // Set the output type
     output = static_cast<OutputType>(outputSelected);
 }
 
-void TrackerConfig::setTesting(int testingSelected) {
+void UserConfig::setTesting(int testingSelected) {
     // Set the testing type
     testing = static_cast<TestingType>(testingSelected);
 }

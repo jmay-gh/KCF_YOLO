@@ -1,25 +1,19 @@
 #pragma once
 
-#include "../include/tracking/TrackerManager.h"
-#include "seg/YOLO11Seg.hpp"
+#include "tracking/TrackerManager.h"
 #include "depth/depth_anything.hpp"
-#include "../include/UserInterface.h"
-#include "../include/testing/TestingHandler.h"
+#include "userSetup/UserInterface.h"
 
 #include <opencv2/videoio.hpp>
 #include <filesystem>
 
-
 using namespace std;
-using namespace cv;
-using namespace testing;
 using namespace trackingUtils;
 namespace fs = std::filesystem;
 
-
 void runTrackingOnDataset(const std::string& filePath,
                           const std::string& groundTruthPath,
-                          const TrackerConfig& config,
+                          const UserConfig& config,
                           YOLOv11SegDetector& detector,
                           DepthAnything& depthEstimator,
                           const std::vector<std::string>& classNames,
@@ -27,12 +21,10 @@ void runTrackingOnDataset(const std::string& filePath,
 
 int main() {
     // Run UI once to get config
-    TrackerConfig config;
+    UserConfig config;
     UserInterface ui;
     ui.run(config);
 
-    cout << "Tracker Type: " << config.tracker << endl;
-    cout << "Association Method: " << config.association << endl;
 
     // Set up YOLO detector
     const string labelsPath = "../models/coco.names";
@@ -63,27 +55,17 @@ int main() {
 //            {"../img/deer_6/images.txt", "../img/deer_6/deer_6_gt.txt"},
 //            {"../img/deer_7/images.txt", "../img/deer_7/deer_7_gt.txt"},
             {"../img/zebra_1/images.txt", "../img/zebra_1/zebra_1_gt.txt"},
-            {"../img/zebra_2/images.txt", "../img/zebra_2/zebra_2_gt.txt"},
-            {"../img/zebra_3/images.txt", "../img/zebra_3/zebra_3_gt.txt"},
-            {"../img/zebra_4/images.txt", "../img/zebra_4/zebra_4_gt.txt"},
-            {"../img/zebra_5/images.txt", "../img/zebra_5/zebra_5_gt.txt"},
+//            {"../img/zebra_2/images.txt", "../img/zebra_2/zebra_2_gt.txt"},
+//            {"../img/zebra_3/images.txt", "../img/zebra_3/zebra_3_gt.txt"},
+//            {"../img/zebra_4/images.txt", "../img/zebra_4/zebra_4_gt.txt"},
+//            {"../img/zebra_5/images.txt", "../img/zebra_5/zebra_5_gt.txt"},
     };
 
     // Process each dataset
     for (size_t i = 0; i < datasets.size(); ++i) {
         const auto& [imgList, gtPath] = datasets[i];
-
-        if (config.testing == TrackerConfig::TestingType::MOT_ACCURACY ||
-            config.testing == TrackerConfig::TestingType::MOT_SWEEP) {
-            auto start = std::chrono::high_resolution_clock::now();
-            TestingHandler testingHandler(config);
-            testingHandler.runTests(gtPath, imgList);
-            auto end = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double> elapsed = end - start;
-            std::cout << "Elapsed time for dataset " << i << ": " << elapsed.count() << " seconds\n";
-        } else {
-            runTrackingOnDataset(imgList, gtPath, config, detector, depthEstimator, classNames, static_cast<int>(i));
-        }
+        runTrackingOnDataset(imgList, gtPath, config, detector,
+                             depthEstimator, classNames, static_cast<int>(i));
     }
     return 0;
 }
@@ -91,10 +73,10 @@ int main() {
 
 void runTrackingOnDataset(const std::string& filePath,
                           const std::string& groundTruthPath,
-                          const TrackerConfig& config,
+                          const UserConfig& config,
                           YOLOv11SegDetector& detector,
                           DepthAnything& depthEstimator,
-                          const std::vector<std::string>& classNames,
+                          const vector<string>& classNames,
                           int datasetIdx) {
 
     ifstream listFramesFile(filePath);
@@ -105,7 +87,7 @@ void runTrackingOnDataset(const std::string& filePath,
 
     string frameName;
     getline(listFramesFile, frameName);
-    Mat firstFrame = imread(frameName, IMREAD_COLOR);
+    cv::Mat firstFrame = imread(frameName, cv::IMREAD_COLOR);
     if (firstFrame.empty()) {
         cerr << "Could not read first frame from: " << frameName << endl;
         return;
@@ -125,8 +107,8 @@ void runTrackingOnDataset(const std::string& filePath,
     else if (filePath.find("deer") != string::npos) animalType = "deer";
 
     string outputVideoPath = "../results/output_" + to_string(datasetIdx) + ".avi";
-    VideoWriter videoWriter(outputVideoPath, VideoWriter::fourcc('M','J','P','G'),
-                            fps, Size(frameWidth, frameHeight));
+    cv::VideoWriter videoWriter(outputVideoPath, cv::VideoWriter::fourcc('M','J','P','G'),
+                            fps, cv::Size(frameWidth, frameHeight));
 
     string resultsPath = "../results/" + animalType + "_" + to_string(datasetIdx+1) + ".txt";
     ofstream outputFile(resultsPath);
@@ -136,44 +118,47 @@ void runTrackingOnDataset(const std::string& filePath,
     }
 
     // Tracker manager
-    TrackerManager trackerManager(config, classNames, firstFrame);
+    cv::Mat frame, depthMap, depthColor;
+    TrackerManager trackerManager(config, frame);
+
     int frameIdx = 0;
-    Mat frame, depthMap, depthColor;
 
     while (getline(listFramesFile, frameName)) {
-        frame = imread(frameName, IMREAD_COLOR);
+        frame = imread(frameName, cv::IMREAD_COLOR);
+
         if (frame.empty()) continue;
 
         if (frameIdx % 8 == 0) {
             depthMap = depthEstimator.predict(frame);
-            trackerManager.depthMap = depthMap;
 
             auto detections = detector.segment(frame);
-            for (auto detection : detections) {
+
+            for (auto& detection : detections) {
                 detection.depth = getDepth(detection, depthMap);
+                detection.className = classNames[detection.classId];
             }
 
-            trackerManager.updateTrackersWithDetections(frame, detections);
+            trackerManager.matchTrackers(detections);
         }
         else {
-            trackerManager.updateTrackers(frame);
+            trackerManager.updateTrackers();
         }
 
         // Draw trackers
         trackerManager.drawTrackers(frame);
 
         // Show/save results
-        if (config.output == TrackerConfig::SHOW || config.output == TrackerConfig::BOTH) {
+        if (config.output == UserConfig::SHOW || config.output == UserConfig::BOTH) {
             imshow("Tracking", frame);
-            waitKey(1);
+            cv::waitKey(1);
         }
-        if (config.output == TrackerConfig::SAVE) {
+        if (config.output == UserConfig::SAVE) {
             videoWriter.write(frame);
         }
-        if (config.output == TrackerConfig::RESULTS) {
+        if (config.output == UserConfig::RESULTS) {
             trackerManager.outputTrackers(outputFile, frameIdx);
         }
-        ++frameIdx;
+        frameIdx++;
     }
 
     cout << "Finished processing dataset: " << animalType << "_" << datasetIdx + 1 << endl;
@@ -191,7 +176,7 @@ void runTrackingOnDataset(const std::string& filePath,
 //    string groundTruthPath = "../img/zebra_1/zebra_1_gt.txt";
 //
 //    // Set up and run user interface
-//    TrackerConfig config;
+//    UserConfig config;
 //    UserInterface ui;
 //    ui.run(config);
 //
@@ -221,8 +206,8 @@ void runTrackingOnDataset(const std::string& filePath,
 //    TrackerManager trackerManager(config, classNames, frame);
 //
 //    // Run tests
-//    if (config.testing == TrackerConfig::TestingType::MOT_ACCURACY ||
-//        config.testing == TrackerConfig::TestingType::MOT_SWEEP) {
+//    if (config.testing == UserConfig::TestingType::MOT_ACCURACY ||
+//        config.testing == UserConfig::TestingType::MOT_SWEEP) {
 //        auto start = std::chrono::high_resolution_clock::now();
 //        TestingHandler testingHandler(config);
 //        // Run MOT accuracy tests
@@ -288,13 +273,13 @@ void runTrackingOnDataset(const std::string& filePath,
 //        }
 //
 //        // Output settings
-//        if (config.output == TrackerConfig::SHOW || config.output == TrackerConfig::BOTH) {
+//        if (config.output == UserConfig::SHOW || config.output == UserConfig::BOTH) {
 //            imshow("Tracking", frame);
 //            cv::waitKey(1);
 //        }
-//        if (config.output == TrackerConfig::SAVE) videoWriter.write(frame);
+//        if (config.output == UserConfig::SAVE) videoWriter.write(frame);
 //
-//        if (config.output == TrackerConfig::RESULTS) {
+//        if (config.output == UserConfig::RESULTS) {
 //            trackerManager.outputTrackers(outputFile, frameIdx);
 //        }
 //        ++frameIdx;

@@ -1,64 +1,67 @@
-#include <printf.h>
 #include "../include/tracking/TrackedObject.h"
-#include "trackingUtils.h"
-
-using namespace trackingUtils;
-using namespace cv;
 
 // Constructor
-TrackedObject::TrackedObject(TrackerConfig config, cv::Rect bbox, std::string label, cv::Mat frame, int trackerNum, double depth)
-        : tracker(config.HOG, config.FIXEDWINDOW, config.MULTISCALE, config.LAB),
-        bbox(bbox), label(label), trackerNum(trackerNum), depth(depth)
+TrackedObject::TrackedObject(UserConfig& config, Segmentation& detection, cv::Mat& frame, int trackerNum)
+        : tracker(config.HOG, config.FIXEDWINDOW, config.MULTISCALE, config.LAB)
 {
-    tracker.init(bbox, frame);
-    tracker.update(frame);
-    conf = tracker.best_peak_value;
-
-    isOccluded = false;
-    matchedDetector = true;
-
-    consecutiveLoss = 0;
-    consecutiveFailures = 0;
-
-    // Random colour assignment
-    color = cv::Scalar(rand() % 256, rand() % 256, rand() % 256);
-}
-
-
-// Set matched from detector
-void TrackedObject::setMatched() { matchedDetector = true; }
-// Set unmatched from detector
-void TrackedObject::setUnmatched() { matchedDetector = false; }
-// Get the result of the match
-bool TrackedObject::checkMatched() { return matchedDetector; }
-
-
-// Update a failure to detect a checker
-void TrackedObject::setFailure() { consecutiveFailures++; }
-// Reset failures to 0
-void TrackedObject::resetFailures() { consecutiveFailures = 0; }
-// Check if the failure threshold reached
-bool TrackedObject::checkFailures() { return consecutiveFailures >= 12; }
-
-// Match tracker
-void TrackedObject::matchTracker(cv::Rect box, double meanDepth, const cv::Mat& frame) {
-    // Update bbox and frame
+    // Init tracker
+    cv::Rect box = trackingUtils::toRect(detection);
     tracker.init(box, frame);
+
+    // Set tracker ids
+    trackerId = trackerNum;
+    className = detection.className;
+    color = cv::Scalar(rand() % 256, rand() % 256, rand() % 256);
+
+    // Set params
     bbox = box;
-    depth = meanDepth;
-    // Reset consecutive missed detections and set as matched
-    resetFailures();
-    setMatched();
+    depth = detection.depth;
+    conf = detection.conf;
+
+    // Set states
+    isOccluded = false;
+    isMatched = true;
 }
 
-void TrackedObject::updateTracker(const cv::Mat& frame) {
-    bbox = tracker.update(frame);
+
+// Tracker states
+bool TrackedObject::checkMatched() { return isMatched; }
+
+bool TrackedObject::checkOccluded() { return isOccluded; }
+
+void TrackedObject::addMiss() { consecutiveMisses++; }
+
+bool TrackedObject::checkMisses() { return consecutiveMisses >= 5; }
+
+bool TrackedObject::checkLoss() { return consecutiveLoses >= 12; }
+
+// Match tracker with new detection
+void TrackedObject::matchTracker(Segmentation& detection, cv::Mat& frame) {
+    // Get detection box
+    cv::Rect box = toSafeBox(toRect(detection), frame);
+    // Init tracker with detection
+    tracker.init(box, frame);
+    // Set initial confidence, bounding box and depth
+    conf = detection.conf;
+    depth = detection.depth;
+    bbox = box;
+    // Reset matched state
+    consecutiveMisses = 0;
+    isMatched = true;
+}
+
+// Update the tracker for new frame
+void TrackedObject::updateTracker(cv::Mat& frame) {
+    // Update tracker conf and bounding box
+    bbox = toSafeBox(tracker.update(frame), frame);
     conf = tracker.best_peak_value;
+    // Check for tracker loss
+    if (conf < 0.3f) consecutiveLoses++;
+    else consecutiveLoses = 0;
 }
 
-
-// Draw tracker
-void TrackedObject::draw(cv::Mat& frame, float minDepth, float maxDepth) {
+// Draw the tracker on the frame
+void TrackedObject::drawTracker(cv::Mat& frame, float minDepth, float maxDepth) {
 
     // Draw depth bounding box
     float normDepth = std::clamp((depth-minDepth)/(maxDepth-minDepth), 0.0f, 1.0f);
@@ -72,12 +75,14 @@ void TrackedObject::draw(cv::Mat& frame, float minDepth, float maxDepth) {
     cv::Rect depthBox(bbox.x+4, bbox.y+4, bbox.width-8, bbox.height-8);
     rectangle(frame, depthBox, depthColor, 4);
 
+
     // Draw main bounding box
     rectangle(frame, bbox, color, 2);
     cv::Point point = bbox.tl();
     point.y -= 5;
-    putText(frame, std::to_string(trackerNum) + ", " + label + ", conf: " + std::to_string(conf),
+    putText(frame, std::to_string(trackerId) + ", " + className + ", conf: " + std::to_string(conf),
             point, cv::FONT_HERSHEY_SIMPLEX, 0.7, color, 2);
+
 
     // Draw tracker confidence
     cv::Point depthPoint = bbox.tl();
