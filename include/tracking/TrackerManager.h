@@ -1,46 +1,45 @@
 #pragma once
 
-#include "TrackedObject.h"
-#include "../hungarian_algo/munkres.h"
-#include "../seg/YOLO11Seg.hpp"
-#include "../matching/MatchingManager.h"
+#include "matching/MatchingManager.h"
+#include "tracking/TrackedObject.h"
 
-using namespace cv;
 using namespace std;
 
 class TrackerManager {
+public:
+    TrackerManager(const UserConfig& config, cv::Mat& frame);
 
-    public:
-        TrackerManager(const TrackerConfig& config, const vector<string>& classNames, Mat& currentFrame);
+    // Current trackers
+    vector<TrackedObject> trackers;
 
-        vector<TrackedObject> trackers;
-        Mat& currentFrame;
-        MatchingManager matchingManager;
-        float trackConfThreshold;
-        float detectConfThreshold;
-        int unmatchedThreshold;
+    // Current frame
+    cv::Mat& currentFrame;
 
-        Mat depthMap;
+    // Matching manager class
+    MatchingManager matchingManager;
+    using MatchFunction = function<MatchingManager::MatchResult(vector<TrackedObject>&,
+                                                                const vector<Segmentation>&)>;
+    MatchFunction matchFunc;
 
-        void updateTrackers(const Mat& frame);
-        void updateTrackersWithDetections(const Mat& frame, vector<Segmentation>& detections);
-        void drawTrackers(Mat& frame);
-        void outputTrackers(std::ofstream& out, int frameIdx);
-        pair<float, float> getMinMaxDepth();
+    // Threshold configuration parameters
+    float trackConfThreshold;
+    float detectConfThreshold;
+    int lossThreshold;
 
-    private:
-        int trackerCounter = 0;
-        TrackerConfig config;
-        vector<string> classNames;
+    // Update trackers with the current frame
+    void updateTrackers();
 
-        MatchingManager::MatchResult matchDetections(const vector<Segmentation>& detections);
+    // Match trackers to detections
+    void matchTrackers(vector<Segmentation>& detections);
+    void matchOccludedTrackers(MatchingManager::MatchResult& matchResult,
+                               vector<Segmentation>& detections);
 
-        void matchOccluded(MatchingManager::MatchResult& matchResult,
-                           const vector<Segmentation>& detections,
-                           Mat depthMap);
+    // Draw and record trackers
+    void drawTrackers(cv::Mat& frame);
+    void outputTrackers(std::ofstream& out, int frameIdx);
 
-        Matrix<float> solveCostMatrix(vector<Segmentation> detections);
-        vector<int> findUnmatchedDetections(const vector<pair<int, int>>& matches, int totalDetections);
-//        double getDepth(Segmentation det, Mat depthMap);
+    pair<float, float> getMinMaxDepth();
 
+    int trackerCounter = 0;
+    UserConfig config;
 };

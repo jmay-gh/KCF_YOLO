@@ -1,45 +1,50 @@
 #pragma once
 
-#include <opencv2/core.hpp>
 #include "tracking/KCFTracking/kcftracker.hpp"
-#include "TrackerConfig.h"
-#include <opencv2/tracking.hpp>
+#include "userSetup/UserConfig.h"
+#include "seg/YOLO11Seg.hpp"
+#include "trackingUtils.h"
 
+#include <opencv2/opencv.hpp>
 #include <cmath>
 #include <algorithm>
+
+using namespace trackingUtils;
 
 class TrackedObject {
 
 public:
     // Constructor
-    TrackedObject(TrackerConfig config, cv::Rect bbox, std::string label, cv::Mat frame, int trackerNum, double depth);
+    TrackedObject(UserConfig& config, Segmentation& detection, cv::Mat& frame, int trackerNum);
 
     KCFTracker tracker;
-    cv::Rect bbox;
 
-    std::string label;
-    int trackerNum;
-
-    float conf;
-    float depth;
-
-    bool matchedDetector;
-    bool isOccluded;
-
-    int consecutiveLoss;
-    int consecutiveFailures;
-
+    // Tracker id
+    int trackerId;
+    std::string className;
     cv::Scalar color;
 
-    // Methods
-    void setMatched();
-    void setUnmatched();
-    bool checkMatched();
-    void setFailure();
-    void resetFailures();
-    bool checkFailures();
+    // Tracker params
+    float conf;
+    float depth;
+    cv::Rect bbox;
 
-    void matchTracker(cv::Rect box, double depth, const cv::Mat& frame);
-    void updateTracker(const cv::Mat& frame);
-    void draw(cv::Mat& frame, float minDepth, float maxDepth);
+    // Tracker states
+    bool isMatched;
+    bool isOccluded;
+
+    // Tracker states for removal
+    int consecutiveLoses = 0;
+    int consecutiveMisses = 0;
+
+    // Methods
+    bool checkMatched();
+    bool checkOccluded();
+    void addMiss();
+    bool checkMisses();
+    bool checkLoss();
+
+    void matchTracker(Segmentation& detection, cv::Mat& frame);
+    void updateTracker(cv::Mat& frame);
+    void drawTracker(cv::Mat& frame, float minDepth, float maxDepth);
 };

@@ -2,10 +2,10 @@
 
 #include <string>
 
-class TrackerConfig {
+class UserConfig {
 
 public:
-    TrackerConfig();
+    UserConfig();
     enum TrackerType {
         COTRACKER,
         KERNELISED_CORRELATION_FILTER

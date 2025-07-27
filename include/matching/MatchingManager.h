@@ -1,102 +1,83 @@
 #pragma once
 
+#include "matching/AssignmentSolver.h"
+#include "matching/CostMatrixBuilder.h"
+#include "userSetup/UserConfig.h"
+#include "trackingUtils.h"
+
 #include <vector>
 #include <iostream>
-
-#include "../tracking/TrackedObject.h"
-#include "../seg/YOLO11Seg.hpp"
-#include "tracking/KCFTracking/kcftracker.hpp"
-#include "../trackingUtils.h"
-#include "../hungarian_algo/matrix.h"
-#include "../tracking/KCFTracking/fhog.hpp"
-
-#include "../tracking/KCFTracking/ffttools.hpp"
-#include "../tracking/KCFTracking/recttools.hpp"
-
-#include "../hungarian_algo/munkres.h"
 
 using namespace std;
 
 class MatchingManager {
 
+public:
+    MatchingManager(const UserConfig& config, cv::Mat& frame);
 
-    public:
+    std::function<float(const cv::Rect&, const cv::Rect&)> distanceFunc;
 
-        cv::Mat currentFrame;
-        float iouThreshold;
+    UserConfig config;
+    cv::Mat& currentFrame;
 
-        vector<int> trackIds;
-        vector<int> detectIds;
+    float iouThreshold;
 
-        struct MatchResult {
-            vector<pair<int, int>> matches;
-            set<int> unmatchedTrackers;
-            set<int> unmatchedDetections;
-        };
+    vector<int> trackIds;
+    vector<int> detectIds;
 
-        MatchingManager(const TrackerConfig& config);
-        TrackerConfig config;
+    struct MatchResult {
+        vector<pair<int, int>> matches;
+        set<int> unmatchedTrackers;
+        set<int> unmatchedDetections;
+    };
 
-        // Public matching interfaces
-        MatchResult matchNN(vector<TrackedObject>& trackers,
-                                      const vector<Segmentation>& detections);
-
-        MatchResult matchHungarian(vector<TrackedObject>& trackers,
-                                   const vector<Segmentation>& detections);
-
-        MatchResult matchEMD(vector<TrackedObject>& trackers,
-                             const vector<Segmentation>& detections,
-                             Mat& frame);
-
-        // Public distance functions
-        double euclidean(const cv::Rect& aRect, const cv::Rect& bRect);
-        double iou(const cv::Rect& a, const cv::Rect& b);
-        double inverseIou(const cv::Rect& a, const cv::Rect& b);
-        double peakResponse(TrackedObject& trackers, KCFTracker& detect, Rect detectBox);
-
-        void normalizeFeatureMap(cv::Mat& feat);
-
-        Mat newSignatureApproach(const std::vector<cv::Mat>& hogDescriptors, vector<int> hogSizes, vector<int>& objectIds);
+    // Matching methods
+    MatchResult matchNN(vector<TrackedObject>& trackers, const vector<Segmentation>& detections);
+    MatchResult matchHungarian(vector<TrackedObject>& trackers, const vector<Segmentation>& detections);
+    MatchResult matchEMD(vector<TrackedObject>& trackers, const vector<Segmentation>& detections);
 
 
-        private:
+    // Public distance functions
+    double peakResponse(TrackedObject& trackers, KCFTracker& detect, cv::Rect detectBox);
 
-        MatchResult setMatchResult(int trackerSize, int detectionSize);
+    void normalizeFeatureMap(cv::Mat& feat);
 
-        // Hungarian
-        Matrix<float> computeMatrix(vector<TrackedObject>& trackers,
-                                    const vector<Segmentation>& detections);
+    cv::Mat newSignatureApproach(const vector<cv::Mat>& hogDescriptors, vector<int> hogSizes, vector<int>& objectIds);
+
+
+    private:
+
+    MatchResult setMatchResult(int trackerSize, int detectionSize);
+
+    // Hungarian
+    Matrix<float> computeMatrix(vector<TrackedObject>& trackers,
+                                const vector<Segmentation>& detections);
 
 
 
-        // EMD
+    // EMD
 
-        Mat computeFlow(vector<TrackedObject>& trackers,
-                const vector<Segmentation>& detections,
-                Mat& frame,
-                std::vector<int>& outTrackLabels,
-                std::vector<int>& outDetectionLabels);
+    cv::Mat computeFlow(vector<TrackedObject>& trackers,
+            const vector<Segmentation>& detections,
+                        cv::Mat& frame,
+            std::vector<int>& outTrackLabels,
+            std::vector<int>& outDetectionLabels);
 
-        vector<pair<Rect, float>> collectRects(const vector<TrackedObject>& objects);
-        vector<pair<Rect, float>> collectRects(const vector<Segmentation>& objects);
-        Mat computeSignature(vector<pair<Rect, float>>& boxes, vector<float> weights);
+    vector<pair<cv::Rect, float>> collectRects(const vector<TrackedObject>& objects);
+    vector<pair<cv::Rect, float>> collectRects(const vector<Segmentation>& objects);
+    cv::Mat computeSignature(vector<pair<cv::Rect, float>>& boxes, vector<float> weights);
 
-        template <typename T>
-        std::vector<float> collectWeights(const vector<T>& objects);
+    template <typename T>
+    vector<float> collectWeights(const vector<T>& objects);
 
-        Mat resizeMap(const Mat& input);
-        Mat fftshift(const cv::Mat& input);
-        Mat fourierCropOrPad(const cv::Mat& input, cv::Size targetSize);
 
-        cv::Mat computeHOGSignatureForEMD(const cv::Mat& tmpl);
-        cv::Mat spatialPoolHOG(const cv::Mat& tmpl);
-        cv::Mat computeHOGSignature(const std::vector<cv::Mat>& hogDescriptors, const std::vector<float>& weights);
-        cv::Mat computeAverageHOGSignature(const std::vector<cv::Mat>& hogDescriptors, const std::vector<float>& weights);
+    cv::Mat resizeMap(const cv::Mat& input);
+    cv::Mat fftshift(const cv::Mat& input);
+    cv::Mat fourierCropOrPad(const cv::Mat& input, cv::Size targetSize);
+
+    cv::Mat computeHOGSignatureForEMD(const cv::Mat& tmpl);
+    cv::Mat spatialPoolHOG(const cv::Mat& tmpl);
+    cv::Mat computeHOGSignature(const std::vector<cv::Mat>& hogDescriptors, const std::vector<float>& weights);
+    cv::Mat computeAverageHOGSignature(const std::vector<cv::Mat>& hogDescriptors, const std::vector<float>& weights);
 
 };
-
-namespace distances {
-    double euclidean(const cv::Rect& aRect, const cv::Rect& bRect);
-    double iou(const cv::Rect& a, const cv::Rect& b);
-    double inverseIou(const cv::Rect& a, const cv::Rect& b);
-}

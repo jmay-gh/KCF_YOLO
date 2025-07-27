@@ -2,17 +2,19 @@
 
 #include "seg/YOLO11Seg.hpp"
 
-using namespace cv;
-
 namespace trackingUtils {
 
     // Converts YOLO bounding boxes to Rects
-    inline Rect toRect(const Segmentation& det) {
-        return Rect(det.box.x, det.box.y, det.box.width, det.box.height);
+    inline cv::Rect toRect(const Segmentation& det) {
+        return {det.box.x, det.box.y, det.box.width, det.box.height};
+    }
+
+    inline cv::Rect toSafeBox(const cv::Rect& box, cv::Mat& frame) {
+        return {box & cv::Rect(0, 0, frame.cols, frame.rows)};
     }
 
     // Converts a Rect to a Segmentation object
-    inline BoundingBox toBoundingBox(const Rect& rect) {
+    inline BoundingBox toBoundingBox(const cv::Rect& rect) {
         BoundingBox box;
         box.x = rect.x;
         box.y = rect.y;
@@ -22,17 +24,17 @@ namespace trackingUtils {
     }
 
     // Gets the centre point of a Rect
-    inline Point2d rectCenter(const Rect& rect) {
-        return Point2d((rect.tl() + rect.br()) * 0.5);
+    inline cv::Point2d rectCenter(const cv::Rect& rect) {
+        return cv::Point2d((rect.tl() + rect.br()) * 0.5);
     }
 
     // Resizes a rect around its center
-    inline Rect resizeRect(const Rect& rect, int newWidth, int newHeight) {
-        Point2d center = rectCenter(rect);
-        return Rect(center.x - newWidth / 2, center.y - newHeight / 2, newWidth, newHeight);
+    inline cv::Rect resizeRect(const cv::Rect& rect, int newWidth, int newHeight) {
+        cv::Point2d center = rectCenter(rect);
+        return cv::Rect(center.x - newWidth / 2, center.y - newHeight / 2, newWidth, newHeight);
     }
 
-    inline double getDepth(Segmentation det, Mat& depthMap) {
+    inline double getDepth(Segmentation det, cv::Mat& depthMap) {
         cv::Scalar meanDepth = cv::mean(depthMap, det.mask);
         return meanDepth[0];
     }
