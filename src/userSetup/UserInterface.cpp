@@ -13,7 +13,6 @@ void UserInterface::run(UserConfig& config) {
     int associationSelected = 2;
     int distanceSelected = 2;
     int outputSelected = 0;
-    int testingSelected = 0;
     int emdWeightsSelected = 0;
     int emdSigSelected = 0;
     int occlusionSelected = 0;
@@ -21,6 +20,7 @@ void UserInterface::run(UserConfig& config) {
 
     // --- Labels ---
     std::vector<std::string> trackerOptions = {"CoTracker", "KCF Tracker"};
+
     std::vector<std::string> tab_labels = {"General", "Association", "Distance", "Occlusions", "Removals", "Output", "Testing"};
 
     std::vector<std::string> kcftrackerOptions = {"Grayscale", "HOG", "HOG + LAB"};
@@ -31,8 +31,6 @@ void UserInterface::run(UserConfig& config) {
     std::vector<std::string> occlusionOptions = {"None", "Relaxed Removal", "Relaxed Matching", "Both"};
 
     std::vector<std::string> outputOptions = {"Play live", "Save to file", "Both", "Results"};
-    std::vector<std::string> testingOptions = {"None", "MOT Accuracy", "MOT Accuracy Sweep"};
-
     std::vector<std::string> emdWeights = {"Equal weighting", "Confidence weighting"};
     std::vector<std::string> emdSig = {"Distance", "Distance + Area", "HOG features", "3D Distance + Area"};
 
@@ -49,7 +47,6 @@ void UserInterface::run(UserConfig& config) {
     auto removalDropdown = Radiobox(&removalOptions, &removalSelected);
 
     auto outputDropdown = Radiobox(&outputOptions, &outputSelected);
-    auto testingDropdown = Radiobox(&testingOptions, &testingSelected);
     auto emdWeightsDropdown = Radiobox(&emdWeights, &emdWeightsSelected);
     auto emdSigDropdown = Radiobox(&emdSig, &emdSigSelected);
 
@@ -58,8 +55,7 @@ void UserInterface::run(UserConfig& config) {
 //        Renderer([] { return text("CoTracker: General settings (none)"); }),
 //        Renderer([] { return text("Not applicable for Association"); }),
 //        Renderer([] { return text("Not applicable for Distance"); }),
-        outputDropdown,
-        testingDropdown
+        outputDropdown
     }, &tab_selected);
 
     Component kcfTabs = Container::Tab({
@@ -68,8 +64,7 @@ void UserInterface::run(UserConfig& config) {
         distanceDropdown,
         occlusionDropdown,
         removalDropdown,
-        outputDropdown,
-        testingDropdown
+        outputDropdown
     }, &tab_selected);
 
     // --- Dynamic Renderer for Active Tabs ---
@@ -138,20 +133,17 @@ void UserInterface::run(UserConfig& config) {
     config.setOcclusion(occlusionSelected);
     config.setRemoval(removalSelected);
     config.setOutput(outputSelected);
-    config.setTesting(testingSelected);
 
     std::cout << "Tracker Type: " << trackerOptions[config.tracker] << std::endl;
     std::cout << "KCF Tracker Type: " << kcftrackerOptions[config.HOG] << std::endl;
     std::cout << "Association Method: " << associationOptions[config.association] << std::endl;
     std::cout << "Distance Metric: " << distanceOptions[config.distance] << std::endl;
     std::cout << "Output Type: " << outputOptions[config.output] << std::endl;
-    std::cout << "Testing Type: " << testingOptions[config.testing] << std::endl;
     std::cout << "EMD Weighting: " << emdWeights[config.emdWeight] << std::endl;
     std::cout << "EMD Signature: " << emdSig[config.emdSignature] << std::endl;
     std::cout << "Occlusion Handling: " << occlusionOptions[config.occlusion] << std::endl;
     std::cout << "Removal Type: " << removalOptions[config.removal] << std::endl;
     std::cout << "Output Type: " << outputOptions[config.output] << std::endl;
-    std::cout << "Testing Type: " << testingOptions[config.testing] << std::endl;
 }
 
 

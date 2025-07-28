@@ -40,6 +40,12 @@ int main() {
 
     // List of datasets to process
     vector<pair<string, string>> datasets = {
+//            {"../img/chicken_1/images.txt", "../img/chicken_1/chicken_1_gt.txt"},
+//            {"../img/chicken_2/images.txt", "../img/chicken_2/chicken_2_gt.txt"},
+//            {"../img/chicken_3/images.txt", "../img/chicken_3/chicken_3_gt.txt"},
+//            {"../img/chicken_4/images.txt", "../img/chicken_4/chicken_4_gt.txt"},
+//            {"../img/chicken_5/images.txt", "../img/chicken_5/chicken_5_gt.txt"},
+
 //            {"../img/horse_1/images.txt", "../img/horse_1/horse_1_gt.txt"},
 //            {"../img/horse_2/images.txt", "../img/horse_2/horse_2_gt.txt"},
 //            {"../img/horse_3/images.txt", "../img/horse_3/horse_3_gt.txt"},
@@ -47,6 +53,7 @@ int main() {
 //            {"../img/horse_5/images.txt", "../img/horse_5/horse_5_gt.txt"},
 //            {"../img/horse_6/images.txt", "../img/horse_6/horse_6_gt.txt"},
 //            {"../img/horse_7/images.txt", "../img/horse_7/horse_7_gt.txt"},
+
 //            {"../img/deer_1/images.txt", "../img/deer_1/deer_1_gt.txt"},
 //            {"../img/deer_2/images.txt", "../img/deer_2/deer_2_gt.txt"},
 //            {"../img/deer_3/images.txt", "../img/deer_3/deer_3_gt.txt"},
@@ -54,11 +61,12 @@ int main() {
 //            {"../img/deer_5/images.txt", "../img/deer_5/deer_5_gt.txt"},
 //            {"../img/deer_6/images.txt", "../img/deer_6/deer_6_gt.txt"},
 //            {"../img/deer_7/images.txt", "../img/deer_7/deer_7_gt.txt"},
+
             {"../img/zebra_1/images.txt", "../img/zebra_1/zebra_1_gt.txt"},
-//            {"../img/zebra_2/images.txt", "../img/zebra_2/zebra_2_gt.txt"},
-//            {"../img/zebra_3/images.txt", "../img/zebra_3/zebra_3_gt.txt"},
-//            {"../img/zebra_4/images.txt", "../img/zebra_4/zebra_4_gt.txt"},
-//            {"../img/zebra_5/images.txt", "../img/zebra_5/zebra_5_gt.txt"},
+            {"../img/zebra_2/images.txt", "../img/zebra_2/zebra_2_gt.txt"},
+            {"../img/zebra_3/images.txt", "../img/zebra_3/zebra_3_gt.txt"},
+            {"../img/zebra_4/images.txt", "../img/zebra_4/zebra_4_gt.txt"},
+            {"../img/zebra_5/images.txt", "../img/zebra_5/zebra_5_gt.txt"},
     };
 
     // Process each dataset
@@ -71,103 +79,228 @@ int main() {
 }
 
 
+//void runTrackingOnDataset(const std::string& filePath,
+//                          const std::string& groundTruthPath,
+//                          const UserConfig& config,
+//                          YOLOv11SegDetector& detector,
+//                          DepthAnything& depthEstimator,
+//                          const vector<string>& classNames,
+//                          int datasetIdx) {
+//
+//    ifstream listFramesFile(filePath);
+//    if (!listFramesFile.is_open()) {
+//        cerr << "Could not open image list: " << filePath << endl;
+//        return;
+//    }
+//
+//    string frameName;
+//    getline(listFramesFile, frameName);
+//    cv::Mat firstFrame = imread(frameName, cv::IMREAD_COLOR);
+//    if (firstFrame.empty()) {
+//        cerr << "Could not read first frame from: " << frameName << endl;
+//        return;
+//    }
+//
+//    int frameWidth = firstFrame.cols;
+//    int frameHeight = firstFrame.rows;
+//    double fps = 20.0;
+//
+//    // Reset file
+//    listFramesFile.clear();
+//    listFramesFile.seekg(0);
+//
+//    string animalType;
+//    if (filePath.find("horse") != string::npos) animalType = "horse";
+//    else if (filePath.find("zebra") != string::npos) animalType = "zebra";
+//    else if (filePath.find("deer") != string::npos) animalType = "deer";
+//    else if (filePath.find("chicken") != string::npos) animalType = "chicken";
+//
+//    string outputVideoPath = "../results/output_" + to_string(datasetIdx) + ".avi";
+//    cv::VideoWriter videoWriter(outputVideoPath, cv::VideoWriter::fourcc('M','J','P','G'),
+//                            fps, cv::Size(frameWidth, frameHeight));
+//
+//    string resultsPath = "../results/" + animalType + "_" + to_string(datasetIdx+1) + ".txt";
+//    ofstream outputFile(resultsPath);
+//    if (!outputFile.is_open()) {
+//        cerr << "Could not write to: " << resultsPath << endl;
+//        return;
+//    }
+//
+//    // Tracker manager
+//    cv::Mat frame, depthMap, depthColor;
+//    TrackerManager trackerManager(config, frame);
+//
+//    int frameIdx = 0;
+//
+//    while (getline(listFramesFile, frameName)) {
+//        frame = imread(frameName, cv::IMREAD_COLOR);
+//
+//        if (frame.empty()) continue;
+//
+//        if (frameIdx % 8 == 0) {
+//            depthMap = depthEstimator.predict(frame);
+//
+//            auto detections = detector.segment(frame);
+//
+//            for (auto& detection : detections) {
+//                detection.depth = getDepth(detection, depthMap);
+//                detection.className = classNames[detection.classId];
+//            }
+//
+//            trackerManager.matchTrackers(detections);
+//        }
+//        else {
+//            trackerManager.updateTrackers();
+//        }
+//
+//        // Draw trackers
+//        trackerManager.drawTrackers(frame);
+//
+//        // Show/save results
+//        if (config.output == UserConfig::SHOW || config.output == UserConfig::BOTH) {
+//            imshow("Tracking", frame);
+//            cv::waitKey(1);
+//        }
+//        if (config.output == UserConfig::SAVE) {
+//            videoWriter.write(frame);
+//        }
+//        if (config.output == UserConfig::RESULTS) {
+//            trackerManager.outputTrackers(outputFile, frameIdx);
+//        }
+//        frameIdx++;
+//    }
+//
+//    cout << "Finished processing dataset: " << animalType << "_" << datasetIdx + 1 << endl;
+//    outputFile.close();
+//    videoWriter.release();
+//    listFramesFile.close();
+//}
+
 void runTrackingOnDataset(const std::string& filePath,
                           const std::string& groundTruthPath,
                           const UserConfig& config,
                           YOLOv11SegDetector& detector,
                           DepthAnything& depthEstimator,
-                          const vector<string>& classNames,
+                          const std::vector<std::string>& classNames,
                           int datasetIdx) {
 
-    ifstream listFramesFile(filePath);
-    if (!listFramesFile.is_open()) {
-        cerr << "Could not open image list: " << filePath << endl;
-        return;
-    }
+    for (int i = 0; i < 5; ++i) {
+        for (int j = 0; j < 5; ++j) {
 
-    string frameName;
-    getline(listFramesFile, frameName);
-    cv::Mat firstFrame = imread(frameName, cv::IMREAD_COLOR);
-    if (firstFrame.empty()) {
-        cerr << "Could not read first frame from: " << frameName << endl;
-        return;
-    }
+            float trackConf = 0.1 + i * 0.1;
+            int unmatchedThreshold = 0 + j * 3;
 
-    int frameWidth = firstFrame.cols;
-    int frameHeight = firstFrame.rows;
-    double fps = 20.0;
-
-    // Reset file
-    listFramesFile.clear();
-    listFramesFile.seekg(0);
-
-    string animalType;
-    if (filePath.find("horse") != string::npos) animalType = "horse";
-    else if (filePath.find("zebra") != string::npos) animalType = "zebra";
-    else if (filePath.find("deer") != string::npos) animalType = "deer";
-
-    string outputVideoPath = "../results/output_" + to_string(datasetIdx) + ".avi";
-    cv::VideoWriter videoWriter(outputVideoPath, cv::VideoWriter::fourcc('M','J','P','G'),
-                            fps, cv::Size(frameWidth, frameHeight));
-
-    string resultsPath = "../results/" + animalType + "_" + to_string(datasetIdx+1) + ".txt";
-    ofstream outputFile(resultsPath);
-    if (!outputFile.is_open()) {
-        cerr << "Could not write to: " << resultsPath << endl;
-        return;
-    }
-
-    // Tracker manager
-    cv::Mat frame, depthMap, depthColor;
-    TrackerManager trackerManager(config, frame);
-
-    int frameIdx = 0;
-
-    while (getline(listFramesFile, frameName)) {
-        frame = imread(frameName, cv::IMREAD_COLOR);
-
-        if (frame.empty()) continue;
-
-        if (frameIdx % 8 == 0) {
-            depthMap = depthEstimator.predict(frame);
-
-            auto detections = detector.segment(frame);
-
-            for (auto& detection : detections) {
-                detection.depth = getDepth(detection, depthMap);
-                detection.className = classNames[detection.classId];
+            ifstream listFramesFile(filePath);
+            if (!listFramesFile.is_open()) {
+                cerr << "Could not open image list: " << filePath << endl;
+                return;
             }
 
-            trackerManager.matchTrackers(detections);
-        }
-        else {
-            trackerManager.updateTrackers();
-        }
+            string frameName;
+            getline(listFramesFile, frameName);
+            cv::Mat firstFrame = imread(frameName, cv::IMREAD_COLOR);
+            if (firstFrame.empty()) {
+                cerr << "Could not read first frame from: " << frameName << endl;
+                return;
+            }
 
-        // Draw trackers
-        trackerManager.drawTrackers(frame);
+            int frameWidth = firstFrame.cols;
+            int frameHeight = firstFrame.rows;
+            double fps = 20.0;
 
-        // Show/save results
-        if (config.output == UserConfig::SHOW || config.output == UserConfig::BOTH) {
-            imshow("Tracking", frame);
-            cv::waitKey(1);
+            // Reset file
+            listFramesFile.clear();
+            listFramesFile.seekg(0);
+
+            string animalType;
+            if (filePath.find("horse") != string::npos) {
+                animalType = "horse";
+            }
+            else if (filePath.find("zebra") != string::npos) {
+                animalType = "zebra";
+            }
+            else if (filePath.find("deer") != string::npos) {
+                animalType = "deer";
+            }
+            else if (filePath.find("chicken") != string::npos) {
+                animalType = "chicken";
+            }
+            else {
+                cerr << "Unknown animal type in path: " << filePath << endl;
+                return;
+            }
+
+            string fileName = animalType + "_" + to_string(datasetIdx + 1) + ".txt";
+
+            // Construct output directory and file path
+            fs::path relativeOutputPath = "hung_iou_" + to_string(int(trackConf * 100)) + "_strike" + to_string(unmatchedThreshold) +
+                    "/data/" + fileName;
+
+            string outputVideoPath = "../results/output_" + to_string(datasetIdx + 1) + ".avi";
+            cv::VideoWriter videoWriter(outputVideoPath, cv::VideoWriter::fourcc('M','J','P','G'),
+                                        fps, cv::Size(frameWidth, frameHeight));
+
+            fs::path resultsPath = "../results/strike_based_range2/" + relativeOutputPath.string();
+            fs::create_directories(fs::path(resultsPath).parent_path());
+
+            ofstream outputFile(resultsPath);
+            if (!outputFile.is_open()) {
+                cerr << "Could not write to: " << resultsPath << endl;
+                return;
+            }
+
+            // Tracker manager
+            cv::Mat frame, depthMap, depthColor;
+            TrackerManager trackerManager(config, frame);
+
+            trackerManager.trackConfThreshold = trackConf;
+            trackerManager.lossThreshold = unmatchedThreshold;
+
+            int frameIdx = 0;
+
+            while (getline(listFramesFile, frameName)) {
+                frame = imread(frameName, cv::IMREAD_COLOR);
+                if (frame.empty()) continue;
+
+                if (frameIdx % 8 == 0) {
+                    depthMap = depthEstimator.predict(frame);
+
+                    auto detections = detector.segment(frame);
+
+                    for (auto& detection : detections) {
+                        detection.depth = getDepth(detection, depthMap);
+                        detection.className = classNames[detection.classId];
+                    }
+                    trackerManager.matchTrackers(detections);
+                }
+                else {
+                    trackerManager.updateTrackers();
+                }
+
+                // Draw trackers
+                trackerManager.drawTrackers(frame);
+
+                // Show/save results
+                if (config.output == UserConfig::SHOW || config.output == UserConfig::BOTH) {
+                    imshow("Tracking", frame);
+                    cv::waitKey(1);
+                }
+                if (config.output == UserConfig::SAVE) {
+                    videoWriter.write(frame);
+                }
+                if (config.output == UserConfig::RESULTS) {
+                    trackerManager.outputTrackers(outputFile, frameIdx);
+                }
+                frameIdx++;
+            }
+
+            cout << "Finished processing dataset " << datasetIdx + 1 << endl;
+            outputFile.close();
+            videoWriter.release();
+            listFramesFile.close();
         }
-        if (config.output == UserConfig::SAVE) {
-            videoWriter.write(frame);
-        }
-        if (config.output == UserConfig::RESULTS) {
-            trackerManager.outputTrackers(outputFile, frameIdx);
-        }
-        frameIdx++;
     }
-
-    cout << "Finished processing dataset: " << animalType << "_" << datasetIdx + 1 << endl;
-    outputFile.close();
-    videoWriter.release();
-    listFramesFile.close();
 }
-
-
 
 //
 //int main(void) {

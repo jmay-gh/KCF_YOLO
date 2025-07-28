@@ -56,7 +56,7 @@ void TrackedObject::updateTracker(cv::Mat& frame) {
     bbox = toSafeBox(tracker.update(frame), frame);
     conf = tracker.best_peak_value;
     // Check for tracker loss
-    if (conf < 0.3f) consecutiveLoses++;
+    if (conf < confThreshold) consecutiveLoses++;
     else consecutiveLoses = 0;
 }
 
@@ -66,7 +66,7 @@ void TrackedObject::drawTracker(cv::Mat& frame, float minDepth, float maxDepth) 
     // Draw depth bounding box
     float normDepth = std::clamp((depth-minDepth)/(maxDepth-minDepth), 0.0f, 1.0f);
 
-    int hue = static_cast<int>(120.0f * (1.0f - normDepth));  // 120 (green) to 0 (red)
+    int hue = static_cast<int>(60.0f * (1.0f - normDepth));
     cv::Mat hsv(1, 1, CV_8UC3, cv::Scalar(hue, 255, 255));
     cv::Mat bgr;
     cv::cvtColor(hsv, bgr, cv::COLOR_HSV2BGR);
@@ -75,14 +75,12 @@ void TrackedObject::drawTracker(cv::Mat& frame, float minDepth, float maxDepth) 
     cv::Rect depthBox(bbox.x+4, bbox.y+4, bbox.width-8, bbox.height-8);
     rectangle(frame, depthBox, depthColor, 4);
 
-
     // Draw main bounding box
     rectangle(frame, bbox, color, 2);
     cv::Point point = bbox.tl();
     point.y -= 5;
     putText(frame, std::to_string(trackerId) + ", " + className + ", conf: " + std::to_string(conf),
             point, cv::FONT_HERSHEY_SIMPLEX, 0.7, color, 2);
-
 
     // Draw tracker confidence
     cv::Point depthPoint = bbox.tl();

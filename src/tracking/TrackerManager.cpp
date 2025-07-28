@@ -61,8 +61,8 @@ void TrackerManager::updateTrackers() {
         }
         else if (config.removal == UserConfig::STRIKE_BASED) {
             remove = config.occlusion == UserConfig::RELAXED_REMOVAL
-                     ? (it->checkLoss() && !it->isOccluded)
-                     : (it->checkLoss());
+                     ? (it->consecutiveLoses > lossThreshold && !it->isOccluded)
+                     : (it->consecutiveLoses > lossThreshold);
         }
         if (remove) it = trackers.erase(it);
         else ++it;
@@ -86,15 +86,16 @@ void TrackerManager::matchTrackers(vector<Segmentation>& detections) {
     // Add new trackers for unmatched detections
     for (auto& detIdx : matchResult.unmatchedDetections) {
         TrackedObject newTracker(config, detections[detIdx], currentFrame, trackerCounter++);
+        newTracker.confThreshold = trackConfThreshold;
         trackers.emplace_back(newTracker);
     }
 
     // Mark or remove unmatched trackers
-    for (auto it = trackers.begin(); it != trackers.end(); ) {
-       if (!it->checkMatched()) it->addMiss();
-       if (it->checkMisses()) it = trackers.erase(it);
-       else ++it;
-    }
+//    for (auto it = trackers.begin(); it != trackers.end(); ) {
+//       if (!it->checkMatched()) it->addMiss();
+//       if (it->checkMisses()) it = trackers.erase(it);
+//       else ++it;
+//    }
 }
 
 
@@ -160,11 +161,11 @@ void TrackerManager::outputTrackers(std::ofstream& out, int frameIdx) {
 
 
 pair<float, float> TrackerManager::getMinMaxDepth() {
-    float minVal, maxVal = 0.0f;
+    float minVal, maxVal = trackers[0].depth;
     for (auto& tracker : trackers) {
         if (tracker.depth < 0) continue;
-        if (minVal > tracker.depth || minVal < 0) minVal = tracker.depth;
-        if (maxVal < tracker.depth) maxVal = tracker.depth;
+        minVal = std::min(minVal, tracker.depth);
+        maxVal = std::max(maxVal, tracker.depth);
     }
-    return {minVal, maxVal}; // or maxVal, depending on your needs
+    return {minVal, maxVal};
 }
