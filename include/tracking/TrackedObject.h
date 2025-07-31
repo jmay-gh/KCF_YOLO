@@ -30,17 +30,24 @@ public:
     cv::Rect bbox;
 
     // Tracker states
-    bool isMatched;
-    bool isOccluded;
+    bool isMatched = true;
+    bool isOccluded = false;
+    bool occRemoval = false;
 
     // Tracker states for removal
+    float confThreshold;
+    float occConfThreshold;
+
     int consecutiveLoses = 0;
     int consecutiveMisses = 0;
 
     // Methods
     bool checkMatched();
     bool checkOccluded();
+
     void addMiss();
+    void addLoss();
+
     bool checkMisses();
     bool checkLoss();
 

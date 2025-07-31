@@ -21,7 +21,7 @@ void UserInterface::run(UserConfig& config) {
     // --- Labels ---
     std::vector<std::string> trackerOptions = {"CoTracker", "KCF Tracker"};
 
-    std::vector<std::string> tab_labels = {"General", "Association", "Distance", "Occlusions", "Removals", "Output", "Testing"};
+    std::vector<std::string> tab_labels = {"General", "Association", "Distance", "Occlusions", "Removals", "Output"};
 
     std::vector<std::string> kcftrackerOptions = {"Grayscale", "HOG", "HOG + LAB"};
     std::vector<std::string> associationOptions = {"Nearest Neighbour", "Hungarian Algorithm", "Ground Movers Distance"};

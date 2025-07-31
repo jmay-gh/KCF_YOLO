@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "tracking/TrackedObject.h"
 #include "matching/DistanceCalculator.h"
 #include "matching/SignatureGenerator.h"
 #include "hungarian_algo/matrix.h"
@@ -17,13 +16,15 @@ public:
     static Matrix<float> buildCostMatrix(
             const std::vector<TrackedObject>& trackers,
             const std::vector<Segmentation>& detections,
-            DistanceFunc distanceFunc
+            DistanceFunc distanceFunc,
+            UserConfig& config
     );
 
     static Matrix<float> buildFlowMatrix(
             const std::vector<TrackedObject>& trackers,
             const std::vector<Segmentation>& detections,
-            cv::Mat& frame
+            cv::Mat& frame,
+            UserConfig& config
     );
 };
 

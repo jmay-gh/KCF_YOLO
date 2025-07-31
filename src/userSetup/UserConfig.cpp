@@ -44,8 +44,3 @@ void UserConfig::setOutput(int outputSelected) {
     // Set the output type
     output = static_cast<OutputType>(outputSelected);
 }
-
-void UserConfig::setTesting(int testingSelected) {
-    // Set the testing type
-    testing = static_cast<TestingType>(testingSelected);
-}

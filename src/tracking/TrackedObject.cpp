@@ -18,9 +18,9 @@ TrackedObject::TrackedObject(UserConfig& config, Segmentation& detection, cv::Ma
     depth = detection.depth;
     conf = detection.conf;
 
-    // Set states
-    isOccluded = false;
-    isMatched = true;
+    if (config.occlusion == UserConfig::RELAXED_REMOVAL) {
+        occRemoval = true;
+    }
 }
 
 
@@ -31,20 +31,26 @@ bool TrackedObject::checkOccluded() { return isOccluded; }
 
 void TrackedObject::addMiss() { consecutiveMisses++; }
 
-bool TrackedObject::checkMisses() { return consecutiveMisses >= 5; }
+void TrackedObject::addLoss() { consecutiveLoses++; }
 
-bool TrackedObject::checkLoss() { return consecutiveLoses >= 12; }
+//bool TrackedObject::checkMisses() { return consecutiveMisses >= 5; }
+
+//bool TrackedObject::checkLoss() { return consecutiveLoses >= 12; }
 
 // Match tracker with new detection
 void TrackedObject::matchTracker(Segmentation& detection, cv::Mat& frame) {
+
     // Get detection box
     cv::Rect box = toSafeBox(toRect(detection), frame);
+
     // Init tracker with detection
     tracker.init(box, frame);
+
     // Set initial confidence, bounding box and depth
     conf = detection.conf;
     depth = detection.depth;
     bbox = box;
+
     // Reset matched state
     consecutiveMisses = 0;
     isMatched = true;
@@ -52,12 +58,18 @@ void TrackedObject::matchTracker(Segmentation& detection, cv::Mat& frame) {
 
 // Update the tracker for new frame
 void TrackedObject::updateTracker(cv::Mat& frame) {
+
     // Update tracker conf and bounding box
     bbox = toSafeBox(tracker.update(frame), frame);
     conf = tracker.best_peak_value;
+
     // Check for tracker loss
-    if (conf < confThreshold) consecutiveLoses++;
+    if (!isOccluded && conf < confThreshold) consecutiveLoses++;
+    else if (occRemoval && isOccluded && conf < occConfThreshold) consecutiveLoses++;
     else consecutiveLoses = 0;
+
+    // Reset unmatched state
+    isMatched = false;
 }
 
 // Draw the tracker on the frame

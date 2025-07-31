@@ -61,7 +61,8 @@ public:
             // If the input matrix isn't square, make it square
             // and fill the empty values with the largest value present
             // in the matrix.
-            matrix.resize(size, size, matrix.max());
+
+            matrix.resize(size, size, std::numeric_limits<float>::max());
         }
 
 

@@ -34,7 +34,7 @@ MatchingManager::MatchResult MatchingManager::matchNN(vector<TrackedObject>& tra
     if (trackers.empty() || detections.empty()) return result;
 
     // Create cost matrix and solve it
-    auto costMatrix = CostMatrixBuilder::buildCostMatrix(trackers, detections, distanceFunc);
+    auto costMatrix = CostMatrixBuilder::buildCostMatrix(trackers, detections, distanceFunc, config);
     auto matches = AssignmentSolver::solveGreedy(costMatrix);
 
     // Assign matches if they pass distance threshold
@@ -56,13 +56,13 @@ MatchingManager::MatchResult MatchingManager::matchHungarian(std::vector<Tracked
     if (trackers.empty() || detections.empty()) return result;
 
     // Create cost matrix and solve it
-    auto costMatrix = CostMatrixBuilder::buildCostMatrix(trackers, detections, distanceFunc);
+    auto costMatrix = CostMatrixBuilder::buildCostMatrix(trackers, detections, distanceFunc, config);
     auto matches = AssignmentSolver::solveHungarian(costMatrix);
 
     // Assign matches if they pass distance threshold
     for (const auto& [i, j] : matches) {
-        float iouVal = DistanceCalculator::iou(trackers[i].bbox, toRect(detections[j]));
-        if (iouVal > 0.5f) {
+        float iouVal = DistanceCalculator::ios(trackers[i].bbox, toRect(detections[j]));
+        if (iouVal > config.matchThreshold) {
             result.matches.emplace_back(i, j);
             result.unmatchedTrackers.erase(i);
             result.unmatchedDetections.erase(j);
@@ -86,8 +86,8 @@ MatchingManager::MatchResult MatchingManager::matchEMD(std::vector<TrackedObject
 
     // Assign matches if they pass distance threshold
     for (auto& [i, j] : matches) {
-        float iouVal = DistanceCalculator::ios(trackers[i].bbox, toRect(detections[j]));
-        if (iouVal > 0.5f) {
+        float iouVal = DistanceCalculator::iou(trackers[i].bbox, toRect(detections[j]));
+        if (iouVal > config.matchThreshold) {
             result.matches.emplace_back(i, j);
             result.unmatchedTrackers.erase(i);
             result.unmatchedDetections.erase(j);

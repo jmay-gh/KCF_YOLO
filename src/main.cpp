@@ -13,7 +13,7 @@ namespace fs = std::filesystem;
 
 void runTrackingOnDataset(const std::string& filePath,
                           const std::string& groundTruthPath,
-                          const UserConfig& config,
+                          UserConfig& config,
                           YOLOv11SegDetector& detector,
                           DepthAnything& depthEstimator,
                           const std::vector<std::string>& classNames,
@@ -40,11 +40,11 @@ int main() {
 
     // List of datasets to process
     vector<pair<string, string>> datasets = {
-//            {"../img/chicken_1/images.txt", "../img/chicken_1/chicken_1_gt.txt"},
+            {"../img/chicken_1/images.txt", "../img/chicken_1/chicken_1_gt.txt"},
 //            {"../img/chicken_2/images.txt", "../img/chicken_2/chicken_2_gt.txt"},
-//            {"../img/chicken_3/images.txt", "../img/chicken_3/chicken_3_gt.txt"},
-//            {"../img/chicken_4/images.txt", "../img/chicken_4/chicken_4_gt.txt"},
-//            {"../img/chicken_5/images.txt", "../img/chicken_5/chicken_5_gt.txt"},
+            {"../img/chicken_3/images.txt", "../img/chicken_3/chicken_3_gt.txt"},
+            {"../img/chicken_4/images.txt", "../img/chicken_4/chicken_4_gt.txt"},
+            {"../img/chicken_5/images.txt", "../img/chicken_5/chicken_5_gt.txt"},
 
 //            {"../img/horse_1/images.txt", "../img/horse_1/horse_1_gt.txt"},
 //            {"../img/horse_2/images.txt", "../img/horse_2/horse_2_gt.txt"},
@@ -178,127 +178,125 @@ int main() {
 
 void runTrackingOnDataset(const std::string& filePath,
                           const std::string& groundTruthPath,
-                          const UserConfig& config,
+                          UserConfig& config,
                           YOLOv11SegDetector& detector,
                           DepthAnything& depthEstimator,
                           const std::vector<std::string>& classNames,
                           int datasetIdx) {
 
-    for (int i = 0; i < 5; ++i) {
-        for (int j = 0; j < 5; ++j) {
+//    for (int i = 9; i <= 12; i++) {            // occLossThreshold: 9 to 12
+//        for (float conf = 0.4f; conf >= 0.1f; conf -= 0.1f) {  // occConfThreshold: 0.4,0.3,0.2,0.1
 
-            float trackConf = 0.1 + i * 0.1;
-            int unmatchedThreshold = 0 + j * 3;
+    for (int i = 0; i < 5; i++) {
 
-            ifstream listFramesFile(filePath);
-            if (!listFramesFile.is_open()) {
-                cerr << "Could not open image list: " << filePath << endl;
-                return;
-            }
+        float matchThreshold = 0.2 + i * 0.1f;
 
-            string frameName;
-            getline(listFramesFile, frameName);
-            cv::Mat firstFrame = imread(frameName, cv::IMREAD_COLOR);
-            if (firstFrame.empty()) {
-                cerr << "Could not read first frame from: " << frameName << endl;
-                return;
-            }
+//            int occLossThreshold = i;
+//            float occConfThreshold = conf;
 
-            int frameWidth = firstFrame.cols;
-            int frameHeight = firstFrame.rows;
-            double fps = 20.0;
+//        std::cout << "occConfThreshold: " << occConfThreshold
+//                  << ", int val: " << int(occConfThreshold*100)
+//                  << ", occLossThreshold: " << occLossThreshold << std::endl;
 
-            // Reset file
-            listFramesFile.clear();
-            listFramesFile.seekg(0);
-
-            string animalType;
-            if (filePath.find("horse") != string::npos) {
-                animalType = "horse";
-            }
-            else if (filePath.find("zebra") != string::npos) {
-                animalType = "zebra";
-            }
-            else if (filePath.find("deer") != string::npos) {
-                animalType = "deer";
-            }
-            else if (filePath.find("chicken") != string::npos) {
-                animalType = "chicken";
-            }
-            else {
-                cerr << "Unknown animal type in path: " << filePath << endl;
-                return;
-            }
-
-            string fileName = animalType + "_" + to_string(datasetIdx + 1) + ".txt";
-
-            // Construct output directory and file path
-            fs::path relativeOutputPath = "hung_iou_" + to_string(int(trackConf * 100)) + "_strike" + to_string(unmatchedThreshold) +
-                    "/data/" + fileName;
-
-            string outputVideoPath = "../results/output_" + to_string(datasetIdx + 1) + ".avi";
-            cv::VideoWriter videoWriter(outputVideoPath, cv::VideoWriter::fourcc('M','J','P','G'),
-                                        fps, cv::Size(frameWidth, frameHeight));
-
-            fs::path resultsPath = "../results/strike_based_range2/" + relativeOutputPath.string();
-            fs::create_directories(fs::path(resultsPath).parent_path());
-
-            ofstream outputFile(resultsPath);
-            if (!outputFile.is_open()) {
-                cerr << "Could not write to: " << resultsPath << endl;
-                return;
-            }
-
-            // Tracker manager
-            cv::Mat frame, depthMap, depthColor;
-            TrackerManager trackerManager(config, frame);
-
-            trackerManager.trackConfThreshold = trackConf;
-            trackerManager.lossThreshold = unmatchedThreshold;
-
-            int frameIdx = 0;
-
-            while (getline(listFramesFile, frameName)) {
-                frame = imread(frameName, cv::IMREAD_COLOR);
-                if (frame.empty()) continue;
-
-                if (frameIdx % 8 == 0) {
-                    depthMap = depthEstimator.predict(frame);
-
-                    auto detections = detector.segment(frame);
-
-                    for (auto& detection : detections) {
-                        detection.depth = getDepth(detection, depthMap);
-                        detection.className = classNames[detection.classId];
-                    }
-                    trackerManager.matchTrackers(detections);
-                }
-                else {
-                    trackerManager.updateTrackers();
-                }
-
-                // Draw trackers
-                trackerManager.drawTrackers(frame);
-
-                // Show/save results
-                if (config.output == UserConfig::SHOW || config.output == UserConfig::BOTH) {
-                    imshow("Tracking", frame);
-                    cv::waitKey(1);
-                }
-                if (config.output == UserConfig::SAVE) {
-                    videoWriter.write(frame);
-                }
-                if (config.output == UserConfig::RESULTS) {
-                    trackerManager.outputTrackers(outputFile, frameIdx);
-                }
-                frameIdx++;
-            }
-
-            cout << "Finished processing dataset " << datasetIdx + 1 << endl;
-            outputFile.close();
-            videoWriter.release();
-            listFramesFile.close();
+        ifstream listFramesFile(filePath);
+        if (!listFramesFile.is_open()) {
+            cerr << "Could not open image list: " << filePath << endl;
+            return;
         }
+
+        string frameName;
+        getline(listFramesFile, frameName);
+        cv::Mat firstFrame = imread(frameName, cv::IMREAD_COLOR);
+        if (firstFrame.empty()) {
+            cerr << "Could not read first frame from: " << frameName << endl;
+            return;
+        }
+
+        int frameWidth = firstFrame.cols;
+        int frameHeight = firstFrame.rows;
+        double fps = 20.0;
+
+        // Reset file
+        listFramesFile.clear();
+        listFramesFile.seekg(0);
+
+        // Get folder name and set file name
+        std::filesystem::path p(filePath);
+        std::string folderName = p.parent_path().filename().string();
+        std::string fileName = folderName + ".txt";
+
+        // Construct output directory and file path
+        fs::path relativeOutputPath = "EMD_" + to_string(int(matchThreshold*100)) + "/data/" + fileName;
+
+        string outputVideoPath = "../results/" + folderName + ".avi";
+        cv::VideoWriter videoWriter(outputVideoPath, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'),
+                                    fps, cv::Size(frameWidth, frameHeight));
+
+        fs::path resultsPath = "../results/threshold_scan_matching_iou_match_no_matrix/tracker_results/" + relativeOutputPath.string();
+        fs::create_directories(fs::path(resultsPath).parent_path());
+
+        ofstream outputFile(resultsPath);
+        if (!outputFile.is_open()) {
+            cerr << "Could not write to: " << resultsPath << endl;
+            return;
+        }
+
+        // Tracker manager
+        cv::Mat frame, depthMap, depthColor;
+        TrackerManager trackerManager(config, frame);
+
+        config.matchThreshold = matchThreshold;
+
+        int frameIdx = 0;
+
+        while (getline(listFramesFile, frameName)) {
+            frame = imread(frameName, cv::IMREAD_COLOR);
+
+            if (frame.empty()) {
+                std::cerr << "Could not load frame from path!" << std::endl;
+                std::exit(1);
+            }
+
+            if (frame.empty()) continue;
+
+            if (frameIdx % 8 == 0) {
+                depthMap = depthEstimator.predict(frame);
+
+                auto detections = detector.segment(frame);
+
+                for (auto &detection: detections) {
+                    detection.depth = getDepth(detection, depthMap);
+                    detection.className = classNames[detection.classId];
+                }
+                trackerManager.matchTrackers(detections);
+            } else {
+                trackerManager.updateTrackers();
+            }
+
+            // Draw trackers
+            trackerManager.drawTrackers(frame);
+
+            // Show/save results
+            if (config.output == UserConfig::SHOW || config.output == UserConfig::BOTH) {
+                cv::Mat smallFrame;
+                cv::resize(frame, smallFrame, cv::Size(), 0.5, 0.5);
+                imshow("Tracking", frame);
+                cv::waitKey(1);
+            }
+            if (config.output == UserConfig::SAVE) {
+                videoWriter.write(frame);
+            }
+            if (config.output == UserConfig::RESULTS) {
+                trackerManager.outputTrackers(outputFile, frameIdx);
+            }
+            frameIdx++;
+        }
+
+        cout << "Finished processing dataset: " << folderName << endl;
+
+        outputFile.close();
+        videoWriter.release();
+        listFramesFile.close();
     }
 }
 

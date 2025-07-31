@@ -22,10 +22,6 @@ TrackerManager::TrackerManager(const UserConfig& config, cv::Mat& frame)
     } else {
         throw std::invalid_argument("Unsupported association method");
     }
-
-    trackConfThreshold = 0.3f;
-    detectConfThreshold = 0.3f;
-    lossThreshold = 12;
 }
 
 void TrackerManager::updateTrackers() {
@@ -52,20 +48,28 @@ void TrackerManager::updateTrackers() {
     }
 
     // REMOVE TRACKERS
-    for (auto it = trackers.begin(); it != trackers.end(); ) {
-        bool remove = false;
-        if (config.removal == UserConfig::THRESHOLD) {
-            remove = config.occlusion == UserConfig::RELAXED_REMOVAL
-                     ? (it->conf < trackConfThreshold && !it->isOccluded)
-                     : (it->conf < trackConfThreshold);
+    if (config.removal == UserConfig::STRIKE_BASED) {
+        for (auto it = trackers.begin(); it != trackers.end(); ) {
+
+            bool remove = false;
+
+            if (config.occlusion == UserConfig::RELAXED_REMOVAL) {
+                // Use different thresholds depending on occlusion state
+                if (it->isOccluded) {
+                    if (it->consecutiveLoses > occLossThreshold) remove = true;
+                }
+                else {
+                    if (it->consecutiveLoses > lossThreshold) remove = true;
+                }
+            }
+            else {
+                // Normal strict removal logic (no relaxed threshold)
+                if (it->consecutiveLoses > lossThreshold) remove = true;
+            }
+
+            if (remove) it = trackers.erase(it);
+            else ++it;
         }
-        else if (config.removal == UserConfig::STRIKE_BASED) {
-            remove = config.occlusion == UserConfig::RELAXED_REMOVAL
-                     ? (it->consecutiveLoses > lossThreshold && !it->isOccluded)
-                     : (it->consecutiveLoses > lossThreshold);
-        }
-        if (remove) it = trackers.erase(it);
-        else ++it;
     }
 }
 
@@ -86,58 +90,62 @@ void TrackerManager::matchTrackers(vector<Segmentation>& detections) {
     // Add new trackers for unmatched detections
     for (auto& detIdx : matchResult.unmatchedDetections) {
         TrackedObject newTracker(config, detections[detIdx], currentFrame, trackerCounter++);
+
         newTracker.confThreshold = trackConfThreshold;
+        newTracker.occConfThreshold = occConfThreshold;
+
         trackers.emplace_back(newTracker);
     }
 
     // Mark or remove unmatched trackers
-//    for (auto it = trackers.begin(); it != trackers.end(); ) {
-//       if (!it->checkMatched()) it->addMiss();
-//       if (it->checkMisses()) it = trackers.erase(it);
-//       else ++it;
-//    }
+    for (auto it = trackers.begin(); it != trackers.end(); ) {
+       if (!it->checkMatched()) it->addMiss();
+       if (it->consecutiveMisses > nomatchThreshold) it = trackers.erase(it);
+       else ++it;
+    }
 }
 
 
 void TrackerManager::matchOccludedTrackers(MatchingManager::MatchResult& matchResult,
                                            vector<Segmentation>& detections) {
-//    // Try to match occluded trackers with new detections
-//    set<int> matchedTrackers;
-//    set<int> matchedDetections;
-//
-//    for (auto& trackIdx : matchResult.unmatchedTrackers) {
-//
-//        if (!trackers[trackIdx].isOccluded) continue;
-//
-//        for (auto& detIdx : matchResult.unmatchedDetections) {
-//
-//            if (matchedDetections.count(detIdx)) continue; // Skip if already matched
-//
-//            float distance = matchingManager.euclidean(trackers[trackIdx].bbox, toRect(detections[detIdx]));
-//
-//            float distanceThreshold = std::sqrt(currentFrame.cols * currentFrame.cols +
-//                    currentFrame.rows * currentFrame.rows) * 0.05f;
-//
-//            if (distance <= distanceThreshold) {
-//                trackers[trackIdx].matchTracker(detections[detIdx], currentFrame);
-//                matchResult.matches.emplace_back(trackIdx, detIdx);
-//                matchedTrackers.insert(trackIdx);
-//                matchedDetections.insert(detIdx);
-//                cout << "Matched an occluded tracker" << endl;
-//                break;
-//            }
-//        }
-//    }
-//
-//    for (int trackIdx : matchedTrackers) {
-//        if (matchResult.unmatchedTrackers.count(trackIdx))
-//            matchResult.unmatchedTrackers.erase(trackIdx);
-//    }
-//
-//    for (int detIdx : matchedDetections) {
-//        if (matchResult.unmatchedDetections.count(detIdx))
-//            matchResult.unmatchedDetections.erase(detIdx);
-//    }
+
+    // Get occluded trackers
+    std::vector<TrackedObject> occTrackers;
+    std::vector<int> occTrackersIdx;
+    for (auto trackIdx : matchResult.unmatchedTrackers) {
+        if (trackers[trackIdx].isOccluded) {
+            occTrackers.push_back(trackers[trackIdx]);
+            occTrackersIdx.push_back(trackIdx);
+        }
+    }
+    if (occTrackers.empty()) return;
+
+    // Get unmatched detections
+    std::vector<Segmentation> unmatchedDetects;
+    std::vector<int> unmatchedDetectsIdx;
+    for (auto detectIdx : matchResult.unmatchedDetections) {
+        unmatchedDetects.push_back(detections[detectIdx]);
+        unmatchedDetectsIdx.push_back(detectIdx);
+    }
+
+    // Reduce matching threshold and match
+    float originalThreshold = config.matchThreshold;
+    config.matchThreshold = relaxedMatchThreshold;
+    auto occMatchResult = matchFunc(occTrackers, unmatchedDetects);
+    config.matchThreshold = originalThreshold;
+
+    // Update matched results
+    for (auto match : occMatchResult.matches) {
+        // Get global indexes
+        int globalTrackIdx = occTrackersIdx[match.first];
+        int globalDetIdx = unmatchedDetectsIdx[match.second];
+        // Match tracker
+        trackers[globalTrackIdx].matchTracker(detections[globalDetIdx], currentFrame);
+        // Update matchResult
+        matchResult.matches.emplace_back(globalTrackIdx, globalDetIdx);
+        matchResult.unmatchedTrackers.erase(globalTrackIdx);
+        matchResult.unmatchedDetections.erase(globalDetIdx);
+    }
 }
 
 // Draw all trackers

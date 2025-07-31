@@ -22,9 +22,16 @@ public:
     MatchFunction matchFunc;
 
     // Threshold configuration parameters
-    float trackConfThreshold;
-    float detectConfThreshold;
-    int lossThreshold;
+    float trackConfThreshold = 0.4f;
+    int lossThreshold = 9;
+    int nomatchThreshold = 9;
+
+    // Relaxed occlusion matching parameters
+    float occConfThreshold;
+    int occLossThreshold;
+
+    // Relaxed match threshold
+    float relaxedMatchThreshold;
 
     // Update trackers with the current frame
     void updateTrackers();

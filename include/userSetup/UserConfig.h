@@ -27,11 +27,6 @@ public:
         BOTH,
         RESULTS
     };
-    enum TestingType {
-        NONE,
-        MOT_ACCURACY,
-        MOT_SWEEP
-    };
     enum EMDWeight {
         UNIFORM,
         CONFIDENCE
@@ -59,7 +54,6 @@ public:
     AssociationMethod association;
     TrackerType tracker;
     OutputType output;
-    TestingType testing;
     EMDWeight emdWeight;
     EMDSignature emdSignature;
     OcclusionType occlusion;
@@ -71,12 +65,13 @@ public:
     bool SILENT;
     bool LAB;
 
+    float matchThreshold;
+
     void setTracker(int trackerSelected);
     void setKCFTracker(int kcftrackerSelected);
     void setAssociation(int associationSelected);
     void setDistance(int distanceSelected);
     void setOutput(int outputSelected);
-    void setTesting(int testingSelected);
     void setEMD(int emdWeightSelected, int emdSignatureSelected);
     void setOcclusion(int occlusionSelected);
     void setRemoval(int removalSelected);
