@@ -3,21 +3,24 @@
 using namespace std;
 using namespace trackingUtils;
 
-TrackerManager::TrackerManager(const UserConfig& config, cv::Mat& frame)
+TrackerManager::TrackerManager(UserConfig config, cv::Mat& frame)
     : matchingManager(config, frame), config(config), currentFrame(frame) {
 
     using enum UserConfig::AssociationMethod;
     if (config.association == NEAREST_NEIGHBOUR) {
-        matchFunc = [this](auto& trackers, const auto& detections) {
-            return matchingManager.matchNN(trackers, detections);
+        baseMatchThreshold = 0.3f;
+        matchFunc = [this](auto& trackers, const auto& detections, float threshold) {
+            return matchingManager.matchNN(trackers, detections, threshold);
         };
     } else if (config.association == HUNGARIAN_ALGORITHM) {
-        matchFunc = [this](auto& trackers, const auto& detections) {
-            return matchingManager.matchHungarian(trackers, detections);
+        baseMatchThreshold = 0.3f;
+        matchFunc = [this](auto& trackers, const auto& detections, float threshold) {
+            return matchingManager.matchHungarian(trackers, detections, threshold);
         };
     } else if (config.association == GROUND_MOVERS_DISTANCE) {
-        matchFunc = [this](auto& trackers, const auto& detections) {
-            return matchingManager.matchEMD(trackers, detections);
+        baseMatchThreshold = 0.4f;
+        matchFunc = [this](auto& trackers, const auto& detections, float threshold) {
+            return matchingManager.matchEMD(trackers, detections, threshold);
         };
     } else {
         throw std::invalid_argument("Unsupported association method");
@@ -77,7 +80,7 @@ void TrackerManager::updateTrackers() {
 void TrackerManager::matchTrackers(vector<Segmentation>& detections) {
 
     // Match trackers to new detections
-    auto matchResult = matchFunc(trackers, detections);
+    auto matchResult = matchFunc(trackers, detections, baseMatchThreshold);
     for (auto& [trackIdx, detIdx] : matchResult.matches) {
         trackers[trackIdx].matchTracker(detections[detIdx], currentFrame);
     }
@@ -98,11 +101,11 @@ void TrackerManager::matchTrackers(vector<Segmentation>& detections) {
     }
 
     // Mark or remove unmatched trackers
-    for (auto it = trackers.begin(); it != trackers.end(); ) {
-       if (!it->checkMatched()) it->addMiss();
-       if (it->consecutiveMisses > nomatchThreshold) it = trackers.erase(it);
-       else ++it;
-    }
+//    for (auto it = trackers.begin(); it != trackers.end(); ) {
+//       if (!it->checkMatched()) it->addMiss();
+//       if (it->consecutiveMisses > nomatchThreshold) it = trackers.erase(it);
+//       else ++it;
+//    }
 }
 
 
@@ -129,10 +132,8 @@ void TrackerManager::matchOccludedTrackers(MatchingManager::MatchResult& matchRe
     }
 
     // Reduce matching threshold and match
-    float originalThreshold = config.matchThreshold;
-    config.matchThreshold = relaxedMatchThreshold;
-    auto occMatchResult = matchFunc(occTrackers, unmatchedDetects);
-    config.matchThreshold = originalThreshold;
+    float relaxedThreshold = baseMatchThreshold * thresholdMultiple;
+    auto occMatchResult = matchFunc(occTrackers, unmatchedDetects, relaxedThreshold);
 
     // Update matched results
     for (auto match : occMatchResult.matches) {
@@ -145,6 +146,7 @@ void TrackerManager::matchOccludedTrackers(MatchingManager::MatchResult& matchRe
         matchResult.matches.emplace_back(globalTrackIdx, globalDetIdx);
         matchResult.unmatchedTrackers.erase(globalTrackIdx);
         matchResult.unmatchedDetections.erase(globalDetIdx);
+        cout << "Matched an occluded tracker" << endl;
     }
 }
 

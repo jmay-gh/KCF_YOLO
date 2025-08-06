@@ -13,11 +13,11 @@ using namespace std;
 class MatchingManager {
 
 public:
-    MatchingManager(const UserConfig& config, cv::Mat& frame);
+    MatchingManager(UserConfig& config, cv::Mat& frame);
 
     std::function<float(const cv::Rect&, const cv::Rect&)> distanceFunc;
 
-    UserConfig config;
+    UserConfig& config;
     cv::Mat& currentFrame;
 
     float iouThreshold;
@@ -32,9 +32,9 @@ public:
     };
 
     // Matching methods
-    MatchResult matchNN(vector<TrackedObject>& trackers, const vector<Segmentation>& detections);
-    MatchResult matchHungarian(vector<TrackedObject>& trackers, const vector<Segmentation>& detections);
-    MatchResult matchEMD(vector<TrackedObject>& trackers, const vector<Segmentation>& detections);
+    MatchResult matchNN(vector<TrackedObject>& trackers, const vector<Segmentation>& detections, float matchingThreshold);
+    MatchResult matchHungarian(vector<TrackedObject>& trackers, const vector<Segmentation>& detections, float matchingThreshold);
+    MatchResult matchEMD(vector<TrackedObject>& trackers, const vector<Segmentation>& detections, float matchingThreshold);
 
     MatchResult setMatchResult(int trackerSize, int detectionSize);
 

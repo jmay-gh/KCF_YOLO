@@ -7,7 +7,7 @@ using namespace std;
 
 class TrackerManager {
 public:
-    TrackerManager(const UserConfig& config, cv::Mat& frame);
+    TrackerManager(UserConfig config, cv::Mat& frame);
 
     // Current trackers
     vector<TrackedObject> trackers;
@@ -18,7 +18,8 @@ public:
     // Matching manager class
     MatchingManager matchingManager;
     using MatchFunction = function<MatchingManager::MatchResult(vector<TrackedObject>&,
-                                                                const vector<Segmentation>&)>;
+                                                                const vector<Segmentation>&,
+                                                                float threshold)>;
     MatchFunction matchFunc;
 
     // Threshold configuration parameters
@@ -30,8 +31,9 @@ public:
     float occConfThreshold;
     int occLossThreshold;
 
-    // Relaxed match threshold
-    float relaxedMatchThreshold;
+    // Matching thresholds
+    float baseMatchThreshold;
+    float thresholdMultiple;
 
     // Update trackers with the current frame
     void updateTrackers();

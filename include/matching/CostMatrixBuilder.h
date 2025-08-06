@@ -16,15 +16,15 @@ public:
     static Matrix<float> buildCostMatrix(
             const std::vector<TrackedObject>& trackers,
             const std::vector<Segmentation>& detections,
-            DistanceFunc distanceFunc,
-            UserConfig& config
+            DistanceFunc distanceFunc
     );
 
     static Matrix<float> buildFlowMatrix(
             const std::vector<TrackedObject>& trackers,
             const std::vector<Segmentation>& detections,
             cv::Mat& frame,
-            UserConfig& config
+            UserConfig& config,
+            float matchingThreshold
     );
 };
 
