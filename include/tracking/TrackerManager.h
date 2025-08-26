@@ -7,7 +7,7 @@ using namespace std;
 
 class TrackerManager {
 public:
-    TrackerManager(UserConfig config, cv::Mat& frame);
+    TrackerManager(UserConfig& config, cv::Mat& frame);
 
     // Current trackers
     vector<TrackedObject> trackers;
@@ -25,15 +25,15 @@ public:
     // Threshold configuration parameters
     float trackConfThreshold = 0.4f;
     int lossThreshold = 9;
-    int nomatchThreshold = 9;
+    int nomatchThreshold = 15;
 
     // Relaxed occlusion matching parameters
     float occConfThreshold;
-    int occLossThreshold;
+    int occLossThreshold = 9;
 
     // Matching thresholds
     float baseMatchThreshold;
-    float thresholdMultiple;
+    float thresholdMultiple = 0.6;
 
     // Update trackers with the current frame
     void updateTrackers();
@@ -50,5 +50,5 @@ public:
     pair<float, float> getMinMaxDepth();
 
     int trackerCounter = 0;
-    UserConfig config;
+    UserConfig& config;
 };

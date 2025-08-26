@@ -1,4 +1,6 @@
 #include "userSetup/UserConfig.h"
+#include <iostream>
+
 
 UserConfig::UserConfig() { }
 
@@ -7,14 +9,19 @@ void UserConfig::setAssociation(int associationSelected) {
     association = static_cast<AssociationMethod>(associationSelected);
 }
 
-void UserConfig::setEMD(int emdWeightSelected, int emdSignatureSelected) {
+void UserConfig::setEMD(int emdWeightSelected) {
     emdWeight = static_cast<EMDWeight>(emdWeightSelected);
-    emdSignature = static_cast<EMDSignature>(emdSignatureSelected);
+//    emdSignature = static_cast<EMDSignature>(emdSignatureSelected);
 }
 
 void UserConfig::setTracker(int trackerSelected) {
     // Set the tracker type
     tracker = static_cast<TrackerType>(trackerSelected);
+}
+
+void UserConfig::setAux(int auxSelected) {
+    std::cout << "AUX SET" << std::endl;
+    auxType = static_cast<AuxType>(auxSelected);
 }
 
 void UserConfig::setKCFTracker(int kcftrackerSelected) {

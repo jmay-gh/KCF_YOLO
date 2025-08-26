@@ -3,22 +3,22 @@
 using namespace std;
 using namespace trackingUtils;
 
-TrackerManager::TrackerManager(UserConfig config, cv::Mat& frame)
+TrackerManager::TrackerManager(UserConfig& config, cv::Mat& frame)
     : matchingManager(config, frame), config(config), currentFrame(frame) {
 
     using enum UserConfig::AssociationMethod;
     if (config.association == NEAREST_NEIGHBOUR) {
-        baseMatchThreshold = 0.3f;
+        baseMatchThreshold = 0.4f;
         matchFunc = [this](auto& trackers, const auto& detections, float threshold) {
             return matchingManager.matchNN(trackers, detections, threshold);
         };
     } else if (config.association == HUNGARIAN_ALGORITHM) {
-        baseMatchThreshold = 0.3f;
+        baseMatchThreshold = 0.4f;
         matchFunc = [this](auto& trackers, const auto& detections, float threshold) {
             return matchingManager.matchHungarian(trackers, detections, threshold);
         };
-    } else if (config.association == GROUND_MOVERS_DISTANCE) {
-        baseMatchThreshold = 0.4f;
+    } else if (config.association == CM_EMD || config.association == FM_EMD) {
+        baseMatchThreshold = 0.3f;
         matchFunc = [this](auto& trackers, const auto& detections, float threshold) {
             return matchingManager.matchEMD(trackers, detections, threshold);
         };
@@ -56,19 +56,8 @@ void TrackerManager::updateTrackers() {
 
             bool remove = false;
 
-            if (config.occlusion == UserConfig::RELAXED_REMOVAL) {
-                // Use different thresholds depending on occlusion state
-                if (it->isOccluded) {
-                    if (it->consecutiveLoses > occLossThreshold) remove = true;
-                }
-                else {
-                    if (it->consecutiveLoses > lossThreshold) remove = true;
-                }
-            }
-            else {
-                // Normal strict removal logic (no relaxed threshold)
-                if (it->consecutiveLoses > lossThreshold) remove = true;
-            }
+            // Normal strict removal logic (no relaxed threshold)
+            if (it->consecutiveLoses > lossThreshold) remove = true;
 
             if (remove) it = trackers.erase(it);
             else ++it;
@@ -86,7 +75,8 @@ void TrackerManager::matchTrackers(vector<Segmentation>& detections) {
     }
 
     // Match occluded trackers with new detections (relaxed matching)
-    if (config.occlusion == UserConfig::RELAXED_MATCHING) {
+    if (config.occlusion == UserConfig::RELAXED_MATCHING ||
+        config.occlusion == UserConfig::REMOVAL_AND_MATCHING) {
         matchOccludedTrackers(matchResult, detections);
     }
 
@@ -101,11 +91,11 @@ void TrackerManager::matchTrackers(vector<Segmentation>& detections) {
     }
 
     // Mark or remove unmatched trackers
-//    for (auto it = trackers.begin(); it != trackers.end(); ) {
-//       if (!it->checkMatched()) it->addMiss();
-//       if (it->consecutiveMisses > nomatchThreshold) it = trackers.erase(it);
-//       else ++it;
-//    }
+    for (auto it = trackers.begin(); it != trackers.end(); ) {
+       if (!it->checkMatched()) it->addMiss();
+       if (it->consecutiveMisses > nomatchThreshold) it = trackers.erase(it);
+       else ++it;
+    }
 }
 
 
@@ -171,6 +161,8 @@ void TrackerManager::outputTrackers(std::ofstream& out, int frameIdx) {
 
 
 pair<float, float> TrackerManager::getMinMaxDepth() {
+    if (trackers.empty()) return {0.0f, 0.0f};
+
     float minVal, maxVal = trackers[0].depth;
     for (auto& tracker : trackers) {
         if (tracker.depth < 0) continue;
@@ -179,3 +171,4 @@ pair<float, float> TrackerManager::getMinMaxDepth() {
     }
     return {minVal, maxVal};
 }
+

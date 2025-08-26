@@ -59,7 +59,7 @@ private:
 // ============================================================================
 // Constants / Thresholds
 // ============================================================================
-static const float CONFIDENCE_THRESHOLD = 0.40f; // Filter boxes below this confidence
+static const float CONFIDENCE_THRESHOLD = 0.30f; // Filter boxes below this confidence
 static const float IOU_THRESHOLD        = 0.45f; // NMS IoU threshold
 static const float MASK_THRESHOLD       = 0.40f; // Slightly lower to capture partial objects
 

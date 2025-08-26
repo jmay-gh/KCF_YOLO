@@ -35,7 +35,12 @@ MatchingManager::MatchResult MatchingManager::matchNN(vector<TrackedObject>& tra
     if (trackers.empty() || detections.empty()) return result;
 
     // Create cost matrix and solve it
-    auto costMatrix = CostMatrixBuilder::buildCostMatrix(trackers, detections, distanceFunc);
+    auto costMatrix = CostMatrixBuilder::buildCostMatrix(trackers,
+                                                         detections,
+                                                         distanceFunc,
+                                                         currentFrame,
+                                                         config,
+                                                         matchingThreshold);
     auto matches = AssignmentSolver::solveGreedy(costMatrix);
 
     // Assign matches if they pass distance threshold
@@ -58,13 +63,18 @@ MatchingManager::MatchResult MatchingManager::matchHungarian(std::vector<Tracked
     if (trackers.empty() || detections.empty()) return result;
 
     // Create cost matrix and solve it
-    auto costMatrix = CostMatrixBuilder::buildCostMatrix(trackers, detections, distanceFunc);
+    auto costMatrix = CostMatrixBuilder::buildCostMatrix(trackers,
+                                                         detections,
+                                                         distanceFunc,
+                                                         currentFrame,
+                                                         config,
+                                                         matchingThreshold);
     auto matches = AssignmentSolver::solveHungarian(costMatrix);
 
     // Assign matches if they pass distance threshold
     for (const auto& [i, j] : matches) {
-        float iouVal = DistanceCalculator::iou(trackers[i].bbox, toRect(detections[j]));
-        if (iouVal > 0.5f) {
+        float iouVal = DistanceCalculator::ios(trackers[i].bbox, toRect(detections[j]));
+        if (iouVal > matchingThreshold) {
             result.matches.emplace_back(i, j);
             result.unmatchedTrackers.erase(i);
             result.unmatchedDetections.erase(j);
@@ -83,12 +93,11 @@ MatchingManager::MatchResult MatchingManager::matchEMD(std::vector<TrackedObject
     MatchResult result = setMatchResult(trackers.size(), detections.size());
     if (trackers.empty() || detections.empty()) return result;
 
-    // Create cost matrix and solve it
-    auto costMatrix = CostMatrixBuilder::buildFlowMatrix(trackers,
-                                                         detections,
-                                                         currentFrame,
-                                                         config,
-                                                         matchingThreshold);
+    auto costMatrix =
+            (config.association == UserConfig::AssociationMethod::CM_EMD)
+            ? CostMatrixBuilder::buildCMEMDMatrix(trackers, detections, currentFrame, config, matchingThreshold)
+            : CostMatrixBuilder::buildFMEMDMatrix(trackers, detections, currentFrame, config, matchingThreshold);
+
     auto matches = AssignmentSolver::solveHungarian(costMatrix);
 
     // Assign matches if they pass distance threshold

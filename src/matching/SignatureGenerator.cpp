@@ -6,13 +6,10 @@ std::pair<cv::Mat, cv::Mat> SignatureGenerator::generateEMDSignature(const Track
                                                  UserConfig& config) {
     using namespace trackingUtils;
 
-    float trackerWeight;
-    float detectionWeight;
+    float trackerWeight = 1.0f;
+    float detectionWeight = 1.0f;
 
-    if (config.emdWeight == UserConfig::EMDWeight::UNIFORM) {
-        trackerWeight = 1.0f; detectionWeight = 1.0f;
-    }
-    else if (config.emdWeight == UserConfig::EMDWeight::CONFIDENCE) {
+    if (config.emdWeight == UserConfig::EMDWeight::CONFIDENCE) {
         trackerWeight = tracker.conf; detectionWeight = detection.conf;
     }
 
@@ -20,22 +17,36 @@ std::pair<cv::Mat, cv::Mat> SignatureGenerator::generateEMDSignature(const Track
     const cv::Rect detectionBox = toSafeBox(toRect(detection), frame);
 
     cv::Mat sig1, sig2;
-    switch (config.emdSignature) {
-        case UserConfig::EMDSignature::DISTANCE: {
-            sig1 = computeSpatialSignature1(trackerBox, tracker.depth, trackerWeight);
-            sig2 = computeSpatialSignature1(detectionBox, detection.depth, detectionWeight);
+    switch (config.auxType) {
+        case UserConfig::AuxType::NONE: {
+            sig1 = computeDistSig(trackerBox, tracker.depth, trackerWeight);
+            sig2 = computeDistSig(detectionBox, detection.depth, detectionWeight);
+            break;
         }
-        case UserConfig::EMDSignature::AREA: {
-            sig1 = computeSpatialSignature3(trackerBox, tracker.depth, trackerWeight);
-            sig2 = computeSpatialSignature3(detectionBox, detection.depth, detectionWeight);
+        case UserConfig::AuxType::AREA: {
+            sig1 = computeAreaSig(trackerBox, tracker.depth, trackerWeight);
+            sig2 = computeAreaSig(detectionBox, detection.depth, detectionWeight);
+            break;
         }
-        case UserConfig::EMDSignature::Z_DIST_AREA: {
-            sig1 = computeSpatialSignature4(trackerBox, tracker.depth, trackerWeight);
-            sig2 = computeSpatialSignature4(detectionBox, detection.depth, detectionWeight);
+        case UserConfig::AuxType::DEPTH: {
+            sig1 = computeDepthSig(trackerBox, tracker.depth, trackerWeight);
+            sig2 = computeDepthSig(detectionBox, detection.depth, detectionWeight);
+            break;
         }
-        case UserConfig::EMDSignature::AVERAGE_HOG: {
-            sig1 = computeHOGSignature(frame(trackerBox), trackerWeight);
-            sig2 = computeHOGSignature(frame(detectionBox), detectionWeight);
+        case UserConfig::AuxType::HOG_FEATURES: {
+            float trackX = tracker.bbox.x + tracker.bbox.width * 0.5f;
+            float trackY = tracker.bbox.y + tracker.bbox.height * 0.5f;
+            float detX = detectionBox.x + detectionBox.width * 0.5f;
+            float detY = detectionBox.y + detectionBox.height * 0.5f;
+            sig1 = computeHOGSignature(frame(trackerBox), trackerWeight, trackX, trackY);
+            sig2 = computeHOGSignature(frame(detectionBox), detectionWeight, detX, detY);
+            break;
+        }
+        case UserConfig::AuxType::VELOCITY: {
+            sig1 = computeVelocitySig(trackerBox, 0.0f, trackerWeight);
+            sig2 = computeVelocitySig(detectionBox,
+                                      tracker.motionConsistencyScore(rectCenter(detectionBox)),
+                                      detectionWeight);
             break;
         }
         default:
@@ -45,8 +56,123 @@ std::pair<cv::Mat, cv::Mat> SignatureGenerator::generateEMDSignature(const Track
 }
 
 
+cv::Mat SignatureGenerator::computeDistSig(const cv::Rect& bbox, float depth, float weight) {
+    // (x, y, z, area)
+    float x = bbox.x + bbox.width * 0.5f;
+    float y = bbox.y + bbox.height * 0.5f;
+    cv::Mat sig = (cv::Mat_<float>(1, 3) << weight, x, y);
+    return sig;
+}
+
+
+cv::Mat SignatureGenerator::computeAreaSig(const cv::Rect& bbox, float depth, float weight) {
+    float x = bbox.x + bbox.width * 0.5f;
+    float y = bbox.y + bbox.height * 0.5f;
+
+    cv::Mat sig = (cv::Mat_<float>(5, 3) <<
+            0.2f, x, y,                                 // center
+            0.2f, bbox.x, bbox.y,                       // top-left
+            0.2f, bbox.x+bbox.width, bbox.y,            // top-right
+            0.2f, bbox.x, bbox.y+bbox.height,           // bottom-left
+            0.2f, bbox.x+bbox.width, bbox.y+bbox.height // bottom-right
+    );
+//    cv::Mat sig = (cv::Mat_<float>(1, 4) << weight, x, y, area);
+
+    return sig;
+}
+
+
+cv::Mat SignatureGenerator::computeDepthSig(const cv::Rect& bbox, float depth, float weight) {
+    float x = bbox.x + bbox.width * 0.5f;
+    float y = bbox.y + bbox.height * 0.5f;
+    float z = depth;
+
+    cv::Mat sig = (cv::Mat_<float>(2, 4) <<
+            0.5f * weight, x, y, 0.0f,          // spatial cluster (z = dummy)
+            0.5f * weight, 0.0f, 0.0f, z        // depth cluster (x,y = dummy)
+    );
+//    cv::Mat sig = (cv::Mat_<float>(1, 4) << weight, x, y, z);
+
+    return sig;
+}
+
+
+cv::Mat SignatureGenerator::computeMultiHOGSignature(const cv::Mat& patch,
+                                                     float weight,
+                                                     int gridX,
+                                                     int gridY) {
+    // HOG descriptor
+    cv::HOGDescriptor hog(
+            cv::Size(64, 128),  // winSize
+            cv::Size(16, 16),   // blockSize
+            cv::Size(8, 8),     // blockStride
+            cv::Size(8, 8),     // cellSize
+            9                   // nbins
+    );
+    const int hogSize = hog.getDescriptorSize();
+
+    // Each row = [ weight | x | y | HOG... ]
+    const int cols = 1 + 2 + hogSize;
+    cv::Mat signature(gridX * gridY, cols, CV_32F, cv::Scalar(0.0f));
+
+    int row = 0;
+    for (int gy = 0; gy < gridY; ++gy) {
+        for (int gx = 0; gx < gridX; ++gx) {
+            // Extract sub-patch
+            int x0 = gx * patch.cols / gridX;
+            int y0 = gy * patch.rows / gridY;
+            int w  = (gx == gridX - 1) ? patch.cols - x0 : patch.cols / gridX;
+            int h  = (gy == gridY - 1) ? patch.rows - y0 : patch.rows / gridY;
+            cv::Rect cellRect(x0, y0, w, h);
+
+            cv::Mat cell = patch(cellRect);
+            cv::Mat resized;
+            cv::resize(cell, resized, hog.winSize);
+
+            // Compute HOG
+            std::vector<float> hogFeatures;
+            hog.compute(resized, hogFeatures);
+
+            // Row pointer
+            float* ptr = signature.ptr<float>(row);
+
+            // Assign weight (even split among cells)
+            ptr[0] = weight / static_cast<float>(gridX * gridY);
+
+            // Normalized sub-patch center coords
+            float cx = (x0 + w * 0.5f) / static_cast<float>(patch.cols);
+            float cy = (y0 + h * 0.5f) / static_cast<float>(patch.rows);
+            ptr[1] = cx;
+            ptr[2] = cy;
+
+            // Copy HOG features
+            std::memcpy(ptr + 3, hogFeatures.data(), hogSize * sizeof(float));
+
+            ++row;
+        }
+    }
+
+    return signature;
+}
+
+
+cv::Mat SignatureGenerator::computeVelocitySig(const cv::Rect& bbox, float motionScore, float weight) {
+    float x = bbox.x + bbox.width * 0.5f;
+    float y = bbox.y + bbox.height * 0.5f;
+    float ms = motionScore;
+
+    cv::Mat sig = (cv::Mat_<float>(2, 4) <<
+            0.5f * weight, x, y, 0.0f,          // spatial cluster (z = dummy)
+            0.5f * weight, 0.0f, 0.0f, ms        // depth cluster (x,y = dummy)
+    );
+//    cv::Mat sig = (cv::Mat_<float>(1, 4) << weight, x, y, z);
+
+    return sig;
+}
+
+
 // HOG feature-based signature
-cv::Mat SignatureGenerator::computeHOGSignature(const cv::Mat& patch, float weight) {
+cv::Mat SignatureGenerator::computeHOGSignature(const cv::Mat& patch, float weight, float x, float y) {
     cv::HOGDescriptor hog(
             cv::Size(64, 128),      // winSize
             cv::Size(16, 16),       // blockSize
@@ -59,55 +185,125 @@ cv::Mat SignatureGenerator::computeHOGSignature(const cv::Mat& patch, float weig
     cv::resize(patch, resized, hog.winSize);
     std::vector<float> hogFeatures;
     hog.compute(resized, hogFeatures);
-    // Create sig and add weight
-    cv::Mat signature(1, static_cast<int>(hogFeatures.size() + 1), CV_32F);
-    signature.at<float>(0, 0) = weight;
-    // Copy HOG features in
-    std::memcpy(signature.ptr<float>() + 1, hogFeatures.data(), hogFeatures.size() * sizeof(float));
 
+    // Normalize HOG features
+    cv::Mat signature(1, static_cast<int>(hogFeatures.size() + 3), CV_32F);
+
+    signature.at<float>(0, 0) = weight;
+    signature.at<float>(0, 1) = x;
+    signature.at<float>(0, 2) = y;
+
+    // Copy HOG features in
+    std::memcpy(signature.ptr<float>() + 3, hogFeatures.data(), hogFeatures.size() * sizeof(float));
     if (hogFeatures.empty()) {
         throw std::runtime_error("HOG features are empty — check patch input.");
     }
-
     return signature;
 }
 
 
-// COMPUTING ALL HOG SIGNATURES
-cv::Mat SignatureGenerator::computeSpatialSignature1(const cv::Rect& bbox, float depth, float weight) {
-    // (x, y, z, area)
-    float x = bbox.x + bbox.width * 0.5f;
-    float y = bbox.y + bbox.height * 0.5f;
-    cv::Mat sig = (cv::Mat_<float>(1, 3) << weight, x, y);
-    return sig;
-}
+std::pair<cv::Mat, cv::Mat> SignatureGenerator::generateMultiSignature(
+        const std::vector<TrackedObject>& trackers,
+        const std::vector<Segmentation>& detections,
+        cv::Mat& frame,
+        UserConfig& config)
+{
+    cv::Mat trackerSig, detectionSig;
 
-cv::Mat SignatureGenerator::computeSpatialSignature2(const cv::Rect& bbox, float depth, float weight) {
-    // (x, y, z, area)
-    float x = bbox.x + bbox.width * 0.5f;
-    float y = bbox.y + bbox.height * 0.5f;
-    float z = depth;
-    cv::Mat sig = (cv::Mat_<float>(1, 4) << weight, x, y, z);
-    return sig;
-}
+    auto [minDepth, maxDepth] = getMinMaxDepthDet(trackers, detections);
 
-cv::Mat SignatureGenerator::computeSpatialSignature3(const cv::Rect& bbox, float depth, float weight) {
-    // (x, y, z, area)
-    float x = bbox.x + bbox.width * 0.5f;
-    float y = bbox.y + bbox.height * 0.5f;
-    float area = static_cast<float>(bbox.area());
-    cv::Mat sig = (cv::Mat_<float>(1, 4) << weight, x, y, area);
-    return sig;
-}
+    // --- Trackers ---
+    for (const auto& tracker : trackers) {
+        cv::Mat sigRow;
+        switch (config.auxType) {
+            case UserConfig::AuxType::NONE: {
+                float x = (tracker.bbox.x + tracker.bbox.width * 0.5f) / static_cast<float>(frame.cols);
+                float y = (tracker.bbox.y + tracker.bbox.height * 0.5f) / static_cast<float>(frame.rows);
+                sigRow = (cv::Mat_<float>(1, 3) << tracker.conf, x, y);
+                break;
+            }
+            case UserConfig::AuxType::AREA: {
+                float x = (tracker.bbox.x + tracker.bbox.width * 0.5f) / static_cast<float>(frame.cols);
+                float y = (tracker.bbox.y + tracker.bbox.height * 0.5f) / static_cast<float>(frame.rows);
+                float areaNorm = tracker.bbox.area() / static_cast<float>(frame.cols * frame.rows);
+                sigRow = (cv::Mat_<float>(1, 4) << tracker.conf, x, y, areaNorm);
+                break;
+            }
+            case UserConfig::AuxType::DEPTH: {
+                float x = (tracker.bbox.x + tracker.bbox.width * 0.5f) / static_cast<float>(frame.cols);
+                float y = (tracker.bbox.y + tracker.bbox.height * 0.5f) / static_cast<float>(frame.rows);
 
-cv::Mat SignatureGenerator::computeSpatialSignature4(const cv::Rect& bbox, float depth, float weight) {
-    // (x, y, z, area)
-    float x = bbox.x + bbox.width * 0.5f;
-    float y = bbox.y + bbox.height * 0.5f;
-    float z = depth;
-    float area = static_cast<float>(bbox.area());
-    cv::Mat sig = (cv::Mat_<float>(1, 5) << weight, x, y, z, area);
-    return sig;
+                float zNorm = 0.5f; // default fallback
+                if (tracker.depth >= 0) {
+                    zNorm = (tracker.depth - minDepth) / (maxDepth - minDepth); // ∈ [0,1]
+                }
+
+                sigRow = (cv::Mat_<float>(1, 4) << tracker.conf, x, y, zNorm);
+                break;
+            }
+            case UserConfig::AuxType::VELOCITY: {
+                float x = tracker.bbox.x + tracker.bbox.width * 0.5f;
+                float y = tracker.bbox.y + tracker.bbox.height * 0.5f;
+                cv::Point2f predictedPos = tracker.predictNextPosition();
+                sigRow = (cv::Mat_<float>(1, 5) << tracker.conf, x, y, predictedPos.x, predictedPos.y);
+                break;
+            }
+            case UserConfig::AuxType::HOG_FEATURES: {
+                float x = tracker.bbox.x + tracker.bbox.width * 0.5f;
+                float y = tracker.bbox.y + tracker.bbox.height * 0.5f;
+                sigRow = computeHOGSignature(frame(tracker.bbox), tracker.conf, x, y);
+                break;
+            }
+        }
+        trackerSig.push_back(sigRow); // vconcat alternative
+    }
+
+    // --- Detections ---
+    for (const auto& det : detections) {
+        cv::Mat sigRow;
+        switch (config.auxType) {
+            case UserConfig::AuxType::NONE: {
+                float x = (det.box.x + det.box.width * 0.5f) / static_cast<float>(frame.cols);
+                float y = (det.box.y + det.box.height * 0.5f) / static_cast<float>(frame.rows);
+                sigRow = (cv::Mat_<float>(1, 3) << det.conf, x, y);
+                break;
+            }
+            case UserConfig::AuxType::AREA: {
+                float x = (det.box.x + det.box.width * 0.5f) / static_cast<float>(frame.cols);
+                float y = (det.box.y + det.box.height * 0.5f) / static_cast<float>(frame.rows);
+                float areaNorm = det.box.area() / static_cast<float>(frame.cols * frame.rows);
+                sigRow = (cv::Mat_<float>(1, 4) << det.conf, x, y, areaNorm);
+                break;
+            }
+            case UserConfig::AuxType::DEPTH: {
+                float x = (det.box.x + det.box.width * 0.5f) / static_cast<float>(frame.cols);
+                float y = (det.box.y + det.box.height * 0.5f) / static_cast<float>(frame.rows);
+
+                float zNorm = 0.5f; // default fallback
+                if (det.depth >= 0) {
+                    zNorm = (det.depth - minDepth) / (maxDepth - minDepth); // ∈ [0,1]
+                }
+
+                sigRow = (cv::Mat_<float>(1, 4) << det.conf, x, y, zNorm);
+                break;
+            }
+            case UserConfig::AuxType::VELOCITY: {
+                float x = det.box.x + det.box.width * 0.5f;
+                float y = det.box.y + det.box.height * 0.5f;
+                sigRow = (cv::Mat_<float>(1, 5) << det.conf, x, y, x, y);
+                break;
+            }
+            case UserConfig::AuxType::HOG_FEATURES: {
+                float x = det.box.x + det.box.width * 0.5f;
+                float y = det.box.y + det.box.height * 0.5f;
+                sigRow = computeHOGSignature(frame(toRect(det)), det.conf, x, y);
+                break;
+            }
+        }
+        detectionSig.push_back(sigRow);
+    }
+
+    return {trackerSig, detectionSig};
 }
 
 
@@ -136,3 +332,26 @@ float SignatureGenerator::compareSpatialSignatures(const std::vector<float>& sig
     return std::sqrt(dist);
 }
 
+std::pair<float,float> SignatureGenerator::getMinMaxDepthDet(
+        const std::vector<TrackedObject>& trackers,
+        const std::vector<Segmentation>& detections)
+{
+    float minVal = std::numeric_limits<float>::max();
+    float maxVal = std::numeric_limits<float>::lowest();
+
+    for (const auto& t : trackers) {
+        if (t.depth < 0) continue;
+        minVal = std::min(minVal, t.depth);
+        maxVal = std::max(maxVal, t.depth);
+    }
+    for (const auto& d : detections) {
+        if (d.depth < 0) continue;
+        minVal = std::min(minVal, d.depth);
+        maxVal = std::max(maxVal, d.depth);
+    }
+
+    if (minVal == std::numeric_limits<float>::max()) {
+        return {0.0f, 0.0f};
+    }
+    return {minVal, maxVal};
+}

@@ -14,18 +14,36 @@ public:
     using DistanceFunc = std::function<float(const cv::Rect&, const cv::Rect&)>;
 
     static Matrix<float> buildCostMatrix(
-            const std::vector<TrackedObject>& trackers,
+            std::vector<TrackedObject>& trackers,
             const std::vector<Segmentation>& detections,
-            DistanceFunc distanceFunc
+            DistanceFunc distanceFunc,
+            cv::Mat& frame,
+            UserConfig& config,
+            float matchingThreshold
     );
 
-    static Matrix<float> buildFlowMatrix(
+    static Matrix<float> buildCMEMDMatrix(
             const std::vector<TrackedObject>& trackers,
             const std::vector<Segmentation>& detections,
             cv::Mat& frame,
             UserConfig& config,
             float matchingThreshold
     );
+
+    static Matrix<float> buildFMEMDMatrix(
+            const std::vector<TrackedObject>& trackers,
+            const std::vector<Segmentation>& detections,
+            cv::Mat& frame,
+            UserConfig& config,
+            float matchingThreshold);
+
+    static std::pair<float,float> getMinMaxDepthDet(
+            const std::vector<TrackedObject>& trackers,
+            const std::vector<Segmentation>& detections);
+
 };
+
+
+
 
 //#endif //KCF_YOLO_COSTMATRIXBUILDER_H

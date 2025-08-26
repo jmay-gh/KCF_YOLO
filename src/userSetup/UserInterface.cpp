@@ -11,7 +11,8 @@ void UserInterface::run(UserConfig& config) {
     int tab_selected = 0;
     int kcftrackerSelected = 1;
     int associationSelected = 2;
-    int distanceSelected = 2;
+    int distanceSelected = 1;
+    int auxSelected = 0;
     int outputSelected = 0;
     int emdWeightsSelected = 0;
     int emdSigSelected = 0;
@@ -20,12 +21,14 @@ void UserInterface::run(UserConfig& config) {
 
     // --- Labels ---
     std::vector<std::string> trackerOptions = {"CoTracker", "KCF Tracker"};
-
-    std::vector<std::string> tab_labels = {"General", "Association", "Distance", "Occlusions", "Removals", "Output"};
-
+    std::vector<std::string> tab_labels = {"General", "Association", "Distance", "Auxiliary", "Occlusions", "Removals", "Output"};
     std::vector<std::string> kcftrackerOptions = {"Grayscale", "HOG", "HOG + LAB"};
-    std::vector<std::string> associationOptions = {"Nearest Neighbour", "Hungarian Algorithm", "Ground Movers Distance"};
-    std::vector<std::string> distanceOptions = {"Euclidean Distance", "Cosine", "Intersection over Union", "HOG"};
+    std::vector<std::string> associationOptions = {"Nearest Neighbour", "Hungarian Algorithm", "CM-EMD", "FM-EMD"};
+
+    std::vector<std::string> distanceOptions = {"Euclidean Distance", "Intersection over Union"};
+
+    std::vector<std::string> auxOptions = {"None", "Area", "HOG Features", "Depth", "Velocity"};
+
 
     std::vector<std::string> removalOptions = {"None", "Threshold Removal", "Strike Based Removal"};
     std::vector<std::string> occlusionOptions = {"None", "Relaxed Removal", "Relaxed Matching", "Both"};
@@ -43,12 +46,14 @@ void UserInterface::run(UserConfig& config) {
     auto associationDropdown = Radiobox(&associationOptions, &associationSelected);
     auto distanceDropdown = Radiobox(&distanceOptions, &distanceSelected);
 
+    auto auxDropdown = Radiobox(&auxOptions, &auxSelected);
+
     auto occlusionDropdown = Radiobox(&occlusionOptions, &occlusionSelected);
     auto removalDropdown = Radiobox(&removalOptions, &removalSelected);
 
     auto outputDropdown = Radiobox(&outputOptions, &outputSelected);
     auto emdWeightsDropdown = Radiobox(&emdWeights, &emdWeightsSelected);
-    auto emdSigDropdown = Radiobox(&emdSig, &emdSigSelected);
+//    auto emdSigDropdown = Radiobox(&emdSig, &emdSigSelected);
 
     // --- Tab Containers ---
     Component cotrackerTabs = Container::Tab({
@@ -62,6 +67,7 @@ void UserInterface::run(UserConfig& config) {
         kcftrackerDropdown,
         associationDropdown,
         distanceDropdown,
+        auxDropdown,
         occlusionDropdown,
         removalDropdown,
         outputDropdown
@@ -87,7 +93,6 @@ void UserInterface::run(UserConfig& config) {
         tabToggle,
         tabContainer,
         emdWeightsDropdown,
-        emdSigDropdown,
         confirmButton
     });
 
@@ -98,13 +103,13 @@ void UserInterface::run(UserConfig& config) {
         right_pane.push_back(separator());
         right_pane.push_back(tabContainer->Render());
         // Add in EMD settings if selected
-        if (trackerSelected == 1 && tab_selected == 1 && associationSelected == 2) {
+        if (trackerSelected == 1 && tab_selected == 1 && (associationSelected == 2 || associationSelected == 3)) {
             right_pane.push_back(separator());
             right_pane.push_back(text("EMD Weightings:"));
             right_pane.push_back(emdWeightsDropdown->Render());
-            right_pane.push_back(separator());
-            right_pane.push_back(text("EMD Signatures:"));
-            right_pane.push_back(emdSigDropdown->Render());
+//            right_pane.push_back(separator());
+//            right_pane.push_back(text("EMD Signatures:"));
+//            right_pane.push_back(emdSigDropdown->Render());
         }
 
         auto layout = vbox({
@@ -128,8 +133,11 @@ void UserInterface::run(UserConfig& config) {
     config.setTracker(trackerSelected);
     config.setKCFTracker(kcftrackerSelected);
     config.setAssociation(associationSelected);
-    config.setEMD(emdWeightsSelected, emdSigSelected);
+    config.setEMD(emdWeightsSelected);
     config.setDistance(distanceSelected);
+
+    config.setAux(auxSelected);
+
     config.setOcclusion(occlusionSelected);
     config.setRemoval(removalSelected);
     config.setOutput(outputSelected);
@@ -138,9 +146,12 @@ void UserInterface::run(UserConfig& config) {
     std::cout << "KCF Tracker Type: " << kcftrackerOptions[config.HOG] << std::endl;
     std::cout << "Association Method: " << associationOptions[config.association] << std::endl;
     std::cout << "Distance Metric: " << distanceOptions[config.distance] << std::endl;
+    std::cout << "Aux Metric: " << auxOptions[config.auxType] << std::endl;
     std::cout << "Output Type: " << outputOptions[config.output] << std::endl;
     std::cout << "EMD Weighting: " << emdWeights[config.emdWeight] << std::endl;
-    std::cout << "EMD Signature: " << emdSig[config.emdSignature] << std::endl;
+
+//    std::cout << "EMD Signature: " << emdSig[config.emdSignature] << std::endl;
+
     std::cout << "Occlusion Handling: " << occlusionOptions[config.occlusion] << std::endl;
     std::cout << "Removal Type: " << removalOptions[config.removal] << std::endl;
     std::cout << "Output Type: " << outputOptions[config.output] << std::endl;

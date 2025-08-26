@@ -33,6 +33,7 @@ public:
     bool isMatched = true;
     bool isOccluded = false;
     bool occRemoval = false;
+    bool depthOn = false;
 
     // Tracker states for removal
     float confThreshold;
@@ -40,6 +41,12 @@ public:
 
     int consecutiveLoses = 0;
     int consecutiveMisses = 0;
+
+    // Velocity params
+    std::deque<cv::Point2f> positionHistory;
+    cv::Mat motionSubspace;   // cached subspace basis
+    int hankelRows = 3;       // tunable
+    size_t motionWindowSize = 10;
 
     // Methods
     bool checkMatched();
@@ -54,4 +61,12 @@ public:
     void matchTracker(Segmentation& detection, cv::Mat& frame);
     void updateTracker(cv::Mat& frame);
     void drawTracker(cv::Mat& frame, float minDepth, float maxDepth);
-};
+
+
+    void updateMotionHistory();
+    cv::Mat buildHankel(const std::vector<float>& seq, int rows) const;
+    cv::Mat computeMotionSubspace(const std::deque<cv::Point2f>& history) const;
+    float motionConsistencyScore(const cv::Point2f& candidate) const;
+    cv::Point2f predictNextPosition() const;
+
+    };
